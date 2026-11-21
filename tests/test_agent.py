@@ -188,6 +188,32 @@ def test_new_email_lands_and_the_agent_takes_it(three):
     assert AR.arrive()["uid"] == "5"  # another one: the next template, the next id
 
 
+def test_new_email_manual_mode_leaves_it_to_a_person(three):
+    app = FastAPI()
+    app.include_router(cases_api.router)
+    got = TestClient(app).post("/api/cases/arrive?mode=manual").json()
+    assert got["mode"] == "manual"
+    wait()
+    c = F.build_case(got["uid"])
+    assert T.last_run(c) is None and c.stage != "hod"  # the agent never started
+
+
+def test_new_email_checkpoints_stop_for_a_person_then_carry_on(three):
+    from procurement.cases import arrivals as AR
+
+    uid = AR.arrive("checkpoints")["uid"]
+    r = A.run(uid)
+    assert r.stopped == "needs_you" and r.step == "s3" and "approve" in r.reason
+    F.approve(uid, True)  # the person approves
+    r = A.run(uid)
+    assert r.stopped == "needs_you" and r.step == "s6" and "recommended" in r.reason
+    c = F.build_case(uid)
+    for g in CQ.view(c)["categories"]:  # the person confirms the recommended vendor
+        CQ.award(uid, g["category"], g["recommended"]["vendor_id"])
+    r = A.run(uid)
+    assert r.stopped == "ready_for_hod"
+
+
 # ── review fixes ───────────────────────────────────────────────────────────────────────────────
 
 
