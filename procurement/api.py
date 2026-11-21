@@ -117,7 +117,7 @@ async def intake_email(
 def _include_features() -> None:
     import importlib
 
-    for pkg in ("itemcodes", "vendors", "email_rules", "shortlist"):
+    for pkg in ("itemcodes", "vendors", "email_rules", "shortlist", "cases"):
         try:
             mod = importlib.import_module(f"procurement.{pkg}.api")
         except ModuleNotFoundError as e:
