@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vinayak Procurement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same tokens as the six-step demo (index.html at the repo root) */
+:root{
+  --bg:#f3f5f6; --surface:#fff; --sunk:#e8edef; --line:#d3dbdf; --fg:#17232b; --muted:#5a6a74;
+  --accent:#0d6672; --accent-soft:#d7ecee; --on-accent:#fff;
+  --good:#1f7a43; --good-soft:#dcf1e3; --warn:#9a5b00; --warn-soft:#fbecd2; --bad:#b3261e; --bad-soft:#f9dedc;
+  --display:"Archivo",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f171c; --surface:#16222a; --sunk:#1d2b34; --line:#2c3d47; --fg:#e3eaee; --muted:#93a5af;
+  --accent:#4fb8c4; --accent-soft:#163d43; --on-accent:#0b1a1e;
+  --good:#6dcf93; --good-soft:#163524; --warn:#f0b45a; --warn-soft:#3a2a10; --bad:#f28b82; --bad-soft:#3d1c1a; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body)}
+.wrap{max-width:1180px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:1.7rem;font-weight:800} h2{font-size:1.1rem} h3{font-size:.95rem}
+p{margin:0}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)} .small{font-size:.85rem} .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.appbar{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.bar{max-width:1180px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+.appbar .bar:first-child{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:12px;padding-bottom:10px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .mark{width:34px;height:34px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:800 1.05rem var(--display);flex:none}
+.brand b{display:block;font:800 1.05rem/1.2 var(--display)} .brand span{display:block;font-size:.78rem;color:var(--muted)}
+.status{display:flex;gap:8px;flex-wrap:wrap} .status .chip{cursor:default}
+.pagehead{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.pagehead p{color:var(--muted);margin-top:4px;max-width:72ch;font-size:.92rem}
+.chip{display:inline-flex;gap:6px;align-items:center;font-size:.78rem;padding:3px 10px;border-radius:999px;background:var(--sunk);white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)} .chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.acc{background:var(--accent-soft);color:var(--accent)}
+.layout{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:18px;align-items:start}
+@media (max-width:920px){.layout{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel.agent{border-color:var(--accent)}
+label{font-size:.85rem;font-weight:500}
+textarea{width:100%;min-height:220px;font:13px/1.5 var(--mono);padding:10px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);resize:vertical}
+input[type=file]{font-size:.85rem;max-width:100%}
+.btn{font:inherit;font-size:.88rem;cursor:pointer;border-radius:6px;padding:8px 14px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn:disabled{opacity:.55;cursor:wait}
+.btn:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8rem}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.err{padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:.9rem}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.checks li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:10px 12px;border-radius:8px;background:var(--sunk)}
+.checks li.block{background:var(--bad-soft)} .checks li.warn{background:var(--warn-soft)}
+.sev{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px;align-self:start;margin-top:2px}
+.block .sev{background:var(--bad);color:var(--surface)} .warn .sev{background:var(--warn);color:var(--surface)} .ok .sev{background:var(--good);color:var(--surface)}
+.checks .src{grid-column:2;font:11px/1.4 var(--mono);color:var(--muted)}
+.fields{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 18px;margin:0}
+.fields dt{color:var(--muted);font-size:.85rem;padding-top:1px}
+.fields dd{margin:0;min-width:0}
+.q{display:block;font:12px/1.45 var(--mono);color:var(--muted);border-left:2px solid var(--accent);padding-left:8px;margin-top:3px}
+.none{color:var(--muted);font-style:italic}
+.thread{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--line);padding-left:14px}
+.thread li{position:relative}
+.thread li::before{content:"";position:absolute;left:-20px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--sunk);white-space:nowrap}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0} tr.gt td{font-weight:600;background:var(--sunk)} tr.unm td{color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:700px){.grid2{grid-template-columns:minmax(0,1fr)}}
+ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+.mail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.mail button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid var(--line)}
+.mail button:hover,.mail button[aria-current="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.mail button:focus-visible{outline:2px solid var(--accent)}
+.mail .s{font-weight:600;font-size:.88rem;overflow-wrap:anywhere}
+.mail .m{font-size:.75rem;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.banner{padding:10px 14px;border-radius:8px;background:var(--warn-soft);color:var(--fg);font-size:.88rem;margin-bottom:14px;border:1px solid var(--warn)}
+.banner b{color:var(--warn)}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{font:inherit;font-size:.9rem;font-weight:600;background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+nav.tabs button:focus-visible{outline:2px solid var(--accent)}
+.count{font:500 .72rem var(--mono);background:var(--sunk);padding:1px 6px;border-radius:999px;margin-left:4px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:2px}
+.kpi .v{font:800 1.9rem var(--display);font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .l{font-size:.82rem;color:var(--muted)}
+.kpi.stop .v{color:var(--bad)} .kpi.clar .v{color:var(--warn)} .kpi.clear .v{color:var(--good)}
+.stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--sunk)}
+.stack span{display:block;height:100%}
+.dgrid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:18px}
+@media (max-width:920px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.att{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.att button{all:unset;cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;background:var(--sunk)}
+.att button:hover{outline:1px solid var(--accent)} .att button:focus-visible{outline:2px solid var(--accent)}
+.att .sub{grid-column:2;font-size:.8rem;color:var(--muted)}
+.hbar{display:grid;grid-template-columns:minmax(0,1fr) 2rem;gap:4px 10px;align-items:center;font-size:.86rem}
+.hbar .t{grid-column:1/-1;display:flex;justify-content:space-between}
+.hbar .b{height:6px;border-radius:3px;background:var(--accent)}
+.body{margin:0;white-space:pre-wrap;font:13px/1.55 var(--body);background:var(--sunk);border-radius:8px;padding:12px 14px;overflow-wrap:anywhere}
+tr.row{cursor:pointer} tr.row:hover td{background:var(--accent-soft)} tr.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:980px){.steps{grid-template-columns:repeat(2,minmax(0,1fr))}} @media (max-width:640px){.steps{grid-template-columns:minmax(0,1fr)}}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.step.off{background:transparent;border-style:dashed}
+.step .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.step .n{font:800 .8rem var(--display);color:var(--muted);letter-spacing:.06em}
+.step h3{font-size:1rem} .step p{font-size:.86rem;color:var(--muted)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 18px}
+.stat{display:flex;flex-direction:column} .stat .v{font:800 1.35rem var(--display);font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .l{font-size:.76rem;color:var(--muted)} .stat.good .v{color:var(--good)} .stat.warn .v{color:var(--warn)} .stat.bad .v{color:var(--bad)}
+.step .go{align-self:flex-start;margin-top:auto}
+.meta{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="appbar">
+  <div class="bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">V</span>
+      <div><b>Vinayak Procurement</b><span>Site requirement to vendor comparative</span></div>
+    </div>
+    <div class="status">
+      <span class="chip warn" title="The Gmail connection is built (procurement/mailbox.py) but not switched on yet. It needs a dedicated intake mailbox, an app password and an Anthropic API key. Until then the app shows anonymised sample emails run through the real pipeline from hand-written extractions.">Demo data</span>
+      <span class="chip" id="mode">Checking…</span>
+    </div>
+  </div>
+  <nav class="tabs bar" role="tablist">
+    <button role="tab" data-tab="dash" aria-selected="true">Dashboard</button>
+    <button role="tab" data-tab="reqs" aria-selected="false">Requirements</button>
+    <button role="tab" data-tab="emails" aria-selected="false">Emails <span class="count" id="n-emails"></span></button>
+    <button role="tab" data-tab="itemcodes" aria-selected="false">Item codes</button>
+    <button role="tab" data-tab="shortlist" aria-selected="false">Vendor shortlist</button>
+    <button role="tab" data-tab="vendors" aria-selected="false">Vendors</button>
+    <button role="tab" data-tab="rules" aria-selected="false">Email rules</button>
+    <button role="tab" data-tab="read" aria-selected="false" hidden>Read one email</button>
+  </nav>
+</div>
+<div class="wrap">
+  <div class="pagehead">
+    <div><h1 id="page-title">Dashboard</h1><p id="page-sub"></p></div>
+    <span class="small muted" id="asof"></span>
+  </div>
+
+  <section id="tab-dash"></section>
+  <section id="tab-reqs" hidden></section>
+  <section id="tab-itemcodes" hidden></section>
+  <section id="tab-shortlist" hidden></section>
+  <section id="tab-vendors" hidden></section>
+  <section id="tab-rules" hidden></section>
+
+  <section id="tab-emails" hidden>
+    <div class="layout">
+      <div class="panel" style="gap:8px"><div class="eyebrow">Received · newest first</div><ul class="mail" id="demo-list"></ul></div>
+      <section id="demo-out" class="panel agent" aria-live="polite"><div class="empty">Pick an email on the left.</div></section>
+    </div>
+  </section>
+
+  <div class="layout" id="tab-read" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+    <form class="panel" id="form">
+      <div class="eyebrow">Or one email by hand</div>
+      <button type="button" class="btn" id="sample">Run the sample (Riverside, Tower-2)</button>
+      <div class="or">or your own</div>
+      <label for="eml">Email file (.eml, attachments included)</label>
+      <input type="file" id="eml" accept=".eml,message/rfc822">
+      <div class="or">or paste</div>
+      <label for="text">Email text</label>
+      <textarea id="text" placeholder="SUBJECT: …&#10;FROM: …&#10;&#10;Dear Sir, please find attached…"></textarea>
+      <label for="att">Attachments for pasted text (quantity sheet .xlsx)</label>
+      <input type="file" id="att" multiple accept=".xlsx,.xlsm">
+      <button type="submit" class="btn primary" id="go">Read this email</button>
+      <p class="small muted" id="hint"></p>
+    </form>
+    </div>
+
+    <section id="out" class="panel agent" aria-live="polite">
+      <div class="empty">Run the sample, or upload a site email, to see the structured requirement and BOQ checks here.</div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = (n, d = 2) => n == null ? "—" : n.toLocaleString("en-IN", {minimumFractionDigits: d, maximumFractionDigits: d});
+let live = false;
+
+fetch("/api/status").then(r => r.json()).then(s => {
+  live = s.live;
+  $("#mode").className = "chip " + (live ? "good" : "warn");
+  $("#mode").textContent = live ? `Live · ${s.model}` : "Replay mode · no API key";
+  $("#hint").textContent = live ? "" : "No API key is set, so only the sample runs, using a saved reference extraction. Set ANTHROPIC_API_KEY and restart to read your own emails.";
+  $("#go").disabled = !live;
+}).catch(() => { $("#mode").textContent = "Server not reachable"; });
+
+async function run(req) {
+  const out = $("#out");
+  out.innerHTML = `<div class="empty">Reading the email… a live read takes 10–30 seconds.</div>`;
+  $("#go").disabled = $("#sample").disabled = true;
+  try {
+    const r = await req;
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.detail || `Request failed (${r.status})`);
+    render(body);
+  } catch (e) {
+    out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  } finally {
+    $("#go").disabled = !live; $("#sample").disabled = false;
+  }
+}
+
+$("#sample").addEventListener("click", () => run(fetch("/api/samples/riverside")));
+// ── Gmail inbox ──
+let current = null;
+function drawInbox(d) {
+  const st = $("#inbox-status");
+  if (d.error) st.innerHTML = `<span style="color:var(--bad)">${esc(d.error)}</span>`;
+  else if (!d.connected) st.innerHTML = `Not connected. Copy <span class="mono">.env.example</span> to <span class="mono">.env</span>, fill in the Gmail address and an app password (and, optionally, senders to watch), then restart.`;
+  else st.innerHTML = `Reading <b>${esc(d.config.address)}</b> (${esc(d.config.folder)}, last ${d.config.since_days} days) ${d.config.watch_from.length ? `for mail from ${d.config.watch_from.map(w => `<span class="mono">${esc(w)}</span>`).join(", ")}` : "for every email (dedicated intake address)"}. Nothing is marked as read.`;
+  $("#sync").disabled = !d.connected;
+  $("#mail").innerHTML = d.items.length ? d.items.map(i => `<li><button data-uid="${esc(i.uid)}" aria-current="${current === i.uid}">
+    <span class="s">${esc(i.subject || "(no subject)")}</span>
+    <span class="m"><span>${esc((i.sender || "").replace(/<.*>/, "").trim())}</span><span>${esc((i.date || "").slice(0, 16))}</span>
+    ${i.status === "read" ? `${i.blocking ? `<span class="chip bad">${i.blocking} stop</span>` : ""}${i.to_confirm ? `<span class="chip warn">${i.to_confirm} to confirm</span>` : ""}${!i.blocking && !i.to_confirm ? `<span class="chip good">clear</span>` : ""}`
+      : i.status === "needs_key" ? `<span class="chip warn">needs API key</span>` : `<span class="chip bad">failed</span>`}</span></button></li>`).join("")
+    : (d.connected ? `<li class="small muted">No mail yet. Press "Check for new mail".</li>` : "");
+}
+const loadInbox = () => fetch("/api/inbox").then(r => r.json()).then(drawInbox);
+if ($("#inbox")) loadInbox();
+$("#sync")?.addEventListener("click", async () => {
+  const b = $("#sync"); b.disabled = true; b.textContent = "Checking…";
+  try {
+    const r = await fetch("/api/inbox/sync", {method: "POST"}); const d = await r.json();
+    if (!r.ok) throw new Error(d.detail);
+    $("#inbox-status").insertAdjacentHTML("beforeend", ` <b>${d.fetched} new</b>, ${d.read} read${d.failed ? `, ${d.failed} failed` : ""}${d.waiting_for_key ? `, ${d.waiting_for_key} waiting for an API key` : ""}.`);
+    const st = $("#inbox-status").innerHTML; await loadInbox(); $("#inbox-status").innerHTML = st;
+  } catch (e) { $("#inbox-status").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  finally { b.textContent = "Check for new mail"; b.disabled = false; }
+});
+$("#mail")?.addEventListener("click", async e => {
+  const b = e.target.closest("button[data-uid]"); if (!b) return;
+  current = b.dataset.uid;
+  document.querySelectorAll("#mail button").forEach(x => x.setAttribute("aria-current", x === b));
+  const rec = await (await fetch(`/api/inbox/${current}`)).json();
+  if (rec.result) render(rec.result);
+  else $("#out").innerHTML = `<h2>${esc(rec.subject || "(no subject)")}</h2><div class="err">${esc(rec.error || "Not read.")}</div>`;
+});
+
+
+// ── Demo inbox: dashboard + emails tabs ──
+let DEMO = [];
+const statusOf = r => r.checks.some(c => c.severity === "block") ? "stop" : r.checks.some(c => c.severity === "warn") ? "clarify" : "clear";
+const STATUS = {stop: ["Stop", "bad", "Stopped before tender"], clarify: ["Clarify", "warn", "Needs site clarification"], clear: ["Clear", "good", "Clear to tender"]};
+const short = d => (d || "").replace(/^\w+, /, "").slice(0, 11);
+const who = s => (s || "").replace(/<.*>/, "").trim();
+
+const PAGES = {
+  dash: ["Dashboard", "Every step from a site requirement to a vendor recommendation. The agent recommends; a person decides."],
+  reqs: ["Requirements", "Requirement emails read into what is needed, where, by when and who asked."],
+  emails: ["Emails", "Each email next to the requirement read from it, with the line behind every field."],
+  itemcodes: ["Item codes", "Each requirement line matched to an ERP item code, or a new code suggested. Likely duplicates flagged."],
+  shortlist: ["Vendor shortlist", "Vendors ranked for each requirement on price, past performance, lead time and response time, with the reason. You pick who gets the RFQ."],
+  vendors: ["Vendors", "Every vendor we know, what they do, how to reach them and how past jobs went."],
+  rules: ["Email rules", "Which emails get read and which are skipped, before any AI call."],
+  read: ["Read one email", "Upload or paste a site email to read it."],
+};
+function showTab(t) {
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  for (const k of ["dash", "reqs", "emails", "itemcodes", "shortlist", "vendors", "rules", "read"]) $("#tab-" + k).hidden = k !== t;
+  const [title, sub] = PAGES[t] || ["", ""];
+  $("#page-title").textContent = title; $("#page-sub").textContent = sub;
+  if (FEATURES[t]) mountFeature(t);
+  if (t === "dash") drawDashboard();
+}
+document.querySelector("nav.tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+
+function openEmail(uid) {
+  showTab("emails");
+  document.querySelectorAll("#demo-list button").forEach(b => b.setAttribute("aria-current", b.dataset.uid === uid));
+  const rec = DEMO.find(d => d.uid === uid); if (rec) renderSimple(rec.result, $("#demo-out"));
+}
+
+const val = f => f && f.value ? f.value : "";
+
+function drawDemo() {
+  $("#n-emails").textContent = DEMO.length;
+  $("#demo-list").innerHTML = DEMO.map(d => { const r = d.result;
+    return `<li><button data-uid="${d.uid}" aria-current="false"><span class="s">${esc(r.email.subject)}</span>
+      <span class="m"><span>${esc(r.requirement.project.value || "Unknown project")}</span><span>${esc(short(r.email.date))}</span></span></button></li>`; }).join("");
+
+  $("#tab-reqs").innerHTML = `
+    <section class="panel">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="eyebrow">Requirements received · ${DEMO.length}</div><span class="small muted">Click a row to see the email</span></div>
+      <div class="tbl"><table><thead><tr><th>Received</th><th>Project</th><th>What is needed</th><th>Needed by</th><th>Raised by</th></tr></thead><tbody>
+      ${DEMO.map(d => { const q = d.result.requirement;
+        return `<tr class="row" tabindex="0" data-open="${d.uid}"><td class="mono" style="white-space:nowrap">${esc(short(d.result.email.date))}</td>
+          <td>${esc([val(q.project), val(q.block)].filter(Boolean).join(", ") || "—")}</td>
+          <td><b>${esc(val(q.work_type) || "—")}</b>${q.scope_areas.values.length ? `<div class="small muted">${q.scope_areas.values.map(esc).join(" · ")}</div>` : ""}</td>
+          <td>${esc(val(q.start) || "—")}</td><td>${esc(val(q.requested_by) || "—")}</td></tr>`; }).join("")}
+      </tbody></table></div>
+    </section>`;
+}
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.matches("tr[data-open]")) openEmail(e.target.dataset.open); });
+
+const SIMPLE = [
+  ["project","Project"],["block","Tower / block"],["work_type","What is needed"],["scope_areas","Details"],["floors","Floors"],
+  ["start","Needed by / start"],["finish","Finish"],["contract_type","Order type"],["requested_by","Raised by"],["requested_action","Asks for"],
+  ["attachments_referenced","Attachments mentioned"],
+];
+
+function renderSimple(r, el) {
+  const req = r.requirement;
+  el.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center">
+      <h2>${esc(r.email.subject || "(no subject)")}</h2>
+      <span class="chip ${r.extraction_mode === "live" ? "acc" : "warn"}">${r.extraction_mode === "live" ? "Read live by " + esc(r.model) : "Replayed reference extraction"}</span>
+    </div>
+    <div class="meta muted"><span>${esc(r.email.sender || "")}</span><span>${esc(r.email.date || "")}</span></div>
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+        <div class="eyebrow">The email</div>
+        <p class="body">${esc(r.email.body)}</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+        <div class="eyebrow">Requirement read from it</div>
+        <dl class="fields">${SIMPLE.filter(([k]) => req[k] && (req[k].values ? req[k].values.length : req[k].value != null))
+          .map(([k, l]) => `<dt>${l}</dt><dd>${field(req[k])}</dd>`).join("")}</dl>
+        ${r.dropped_fields.length ? `<div class="eyebrow">Dropped: quote not in the email</div>
+          <ul class="plain">${r.dropped_fields.map(d => `<li><b>${esc(d.field)}</b>: ${esc(d.value)}</li>`).join("")}</ul>` : ""}
+      </div>
+    </div>`;
+}
+document.addEventListener("click", e => {
+  const o = e.target.closest("[data-open]"); if (o) { e.preventDefault(); openEmail(o.dataset.open); return; }
+  const b = e.target.closest("#demo-list button[data-uid]"); if (b) openEmail(b.dataset.uid);
+});
+fetch("/api/demo/inbox").then(r => r.json()).then(d => { DEMO = d.sort((a, b) => Date.parse(b.result.email.date) - Date.parse(a.result.email.date)); drawDemo(); drawDashboard(); });
+$("#form").addEventListener("submit", e => {
+  e.preventDefault();
+  const fd = new FormData();
+  const eml = $("#eml").files[0];
+  if (eml) fd.append("eml", eml); else fd.append("text", $("#text").value);
+  for (const f of $("#att").files) fd.append("attachments", f);
+  if (!eml && !$("#text").value.trim()) { $("#out").innerHTML = `<div class="err">Choose an .eml file or paste the email text first.</div>`; return; }
+  run(fetch("/api/intake/email", {method: "POST", body: fd}));
+});
+
+// ── Dashboard: one card per step of the brief, plus the supporting tools. ──
+// To add a step: give it a summary endpoint returning {title, headline, stats:[{label,value,tone}], ready}
+// and set `summary` (and `tab`, if it has a page) below. Cards without data show as "not built yet".
+const FEATURES = {
+  itemcodes: {script: "/web/itemcodes.js", mount: "mountItemCodes"},
+  shortlist: {script: "/web/shortlist.js", mount: "mountShortlist"},
+  vendors: {script: "/web/vendors.js", mount: "mountVendors"},
+  rules: {script: "/web/email_rules.js", mount: "mountEmailRules"},
+};
+const PIPELINE = [
+  {n: 1, title: "Capture the requirement", what: "Read a site email into a structured requirement.", tab: "reqs", local: () => {
+    const withWhen = DEMO.filter(d => d.result.requirement.start.value).length;
+    return {headline: `${DEMO.length} requirement emails read`, stats: [
+      {label: "Emails", value: DEMO.length}, {label: "Have a needed-by date", value: withWhen, tone: withWhen === DEMO.length ? "good" : "warn"},
+      {label: "Projects", value: new Set(DEMO.map(d => d.result.requirement.project.value)).size}]}; }},
+  {n: 2, title: "Match item codes", what: "Map each line to an ERP code, suggest new ones, flag duplicates.", tab: "itemcodes", summary: "/api/itemcodes/summary"},
+  {n: 3, title: "Shortlist vendors & draft RFQs", what: "Score vendors on price, past deals, lead time and response time, then pick who gets the RFQ. Test inboxes only.", tab: "shortlist", summary: "/api/shortlist/summary"},
+  {n: 4, title: "Read & normalise quotes", what: "Rates, GST, freight, payment terms and delivery from any format."},
+  {n: 5, title: "Comparative statement", what: "Rank vendors on price and past performance, with the reason."},
+  {n: 6, title: "Recommend to HOD", what: "A note with its reasoning. The HOD decides."},
+];
+const SUPPORT = [
+  {title: "Vendor directory", what: "Every vendor, their categories, contacts and past performance.", tab: "vendors", summary: "/api/vendors/summary"},
+  {title: "Email rules", what: "Which emails get read, and which are skipped before any AI call.", tab: "rules", summary: "/api/email-rules/summary"},
+];
+
+async function cardData(c) {
+  if (c.local) return {ready: true, ...c.local()};
+  if (!c.summary) return null;
+  try { const r = await fetch(c.summary); return r.ok ? await r.json() : null; } catch { return null; }
+}
+function card(c, d) {
+  const state = d ? (d.ready === false ? ["Set up needed", "warn"] : ["Working", "good"]) : (c.summary ? ["Being built", "acc"] : ["Not started", ""]);
+  return `<div class="step ${d ? "" : "off"}">
+    <div class="top">${c.n ? `<span class="n">STEP ${c.n}</span>` : `<span class="n">TOOL</span>`}<span class="chip ${state[1]}">${state[0]}</span></div>
+    <h3>${esc(c.title)}</h3>
+    <p>${esc(d && d.headline ? d.headline : c.what)}</p>
+    ${d && d.stats && d.stats.length ? `<div class="stats">${d.stats.map(s => `<div class="stat ${s.tone || ""}"><span class="v">${esc(s.value)}</span><span class="l">${esc(s.label)}</span></div>`).join("")}</div>` : ""}
+    ${d && c.tab ? `<button class="btn go" data-go="${c.tab}">Open</button>` : ""}
+  </div>`;
+}
+async function drawDashboard() {
+  const el = $("#tab-dash");
+  const [p, s] = await Promise.all([Promise.all(PIPELINE.map(cardData)), Promise.all(SUPPORT.map(cardData))]);
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div><div class="eyebrow" style="margin-bottom:10px">The six steps</div>
+        <div class="steps">${PIPELINE.map((c, i) => card(c, p[i])).join("")}</div></div>
+      <div><div class="eyebrow" style="margin-bottom:10px">Supporting tools</div>
+        <div class="steps">${SUPPORT.map((c, i) => card(c, s[i])).join("")}</div></div>
+    </div>`;
+}
+document.addEventListener("click", e => { const g = e.target.closest("[data-go]"); if (g) showTab(g.dataset.go); });
+
+const mounted = {};
+function mountFeature(t) {
+  if (mounted[t]) return; mounted[t] = true;
+  const f = FEATURES[t], el = $("#tab-" + t);
+  el.innerHTML = `<div class="empty">Loading…</div>`;
+  const go = () => window[f.mount] ? window[f.mount](el) : (el.innerHTML = `<div class="empty">This page isn't built yet.</div>`);
+  if (window[f.mount]) return go();
+  const sc = document.createElement("script"); sc.src = f.script; sc.onload = go;
+  sc.onerror = () => { mounted[t] = false; el.innerHTML = `<div class="empty">This page isn't built yet.</div>`; };
+  document.head.appendChild(sc);
+}
+
+const LABELS = [
+  ["project","Project"],["block","Tower / block"],["work_type","Work"],["contract_type","Order type"],
+  ["scope_areas","Scope"],["floors","Floors"],["start","Start"],["finish","Finish"],
+  ["requested_by","Raised by"],["requested_action","Asks for"],["vendor_named","Vendor named"],
+  ["vendor_named_basis","Why that vendor"],["attachments_referenced","Attachments mentioned"],["exclusions","Excluded"],
+];
+
+function field(f) {
+  if (!f) return `<span class="none">not stated</span>`;
+  const v = f.values ? (f.values.length ? f.values.map(esc).join(" · ") : null) : (f.value != null ? esc(f.value) : null);
+  if (v == null) return `<span class="none">not stated</span>`;
+  return `${v}${f.quote ? `<span class="q">“${esc(f.quote)}”</span>` : ""}`;
+}
+
+function render(r, el = $("#out")) {
+  const q = r.quantities, req = r.requirement;
+  const counts = {block:0, warn:0, ok:0}; r.checks.forEach(c => counts[c.severity]++);
+  el.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center">
+      <h2>${esc(r.email.subject || "(no subject)")}</h2>
+      <span class="chip ${r.extraction_mode === "live" ? "acc" : "warn"}">${r.extraction_mode === "live" ? "Read live by " + esc(r.model) : "Replayed reference extraction"}</span>
+    </div>
+    <div class="meta muted"><span>${esc(r.email.sender || "")}</span><span>${esc(r.email.date || "")}</span>
+      ${r.email.attachments.map(a => `<span class="mono">Attached: ${esc(a.filename)}${a.used ? " (read)" : ""}</span>`).join("")}</div>
+
+    <div class="eyebrow">BOQ check (SOP step 02) · ${counts.block} blocking · ${counts.warn} to confirm · ${counts.ok} passed</div>
+    <ul class="checks">${r.checks.map(c => `<li class="${c.severity}"><span class="sev">${c.severity === "block" ? "Stop" : c.severity === "warn" ? "Check" : "OK"}</span>
+      <span><b>${esc(c.title)}.</b> ${esc(c.detail)}</span><span class="src">${esc(c.source)}</span></li>`).join("")}</ul>
+
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+        <div class="eyebrow">Structured requirement</div>
+        <dl class="fields">${LABELS.map(([k, l]) => `<dt>${l}</dt><dd>${field(req[k])}</dd>`).join("")}</dl>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="display:flex;flex-direction:column;gap:10px"><div class="eyebrow">What the thread says, oldest first</div>
+          ${req.thread.length ? `<ol class="thread">${req.thread.map(t => `<li><b>${esc(t.who)}</b>: ${esc(t.position)}<span class="q">“${esc(t.quote)}”</span></li>`).join("")}</ol>` : `<span class="none">No positions found.</span>`}</div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Still to confirm with site</div>
+          ${req.open_questions.length ? `<ul class="plain">${req.open_questions.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<span class="none">Nothing open.</span>`}</div>
+        ${r.dropped_fields.length ? `<div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Dropped: quote not in the email</div>
+          <ul class="plain">${r.dropped_fields.map(d => `<li><b>${esc(d.field)}</b>: ${esc(d.value)} <span class="muted small">(quoted “${esc(d.quote || "")}”)</span></li>`).join("")}</ul></div>` : ""}
+      </div>
+    </div>
+
+    ${q ? `<div class="eyebrow">Quantities · ${esc(q.filename)} › ${esc(q.sheet)}</div>
+    <div class="tbl"><table>
+      <thead><tr><th>Code</th><th>Description</th><th>UOM</th>${q.breakdown_columns.map(c => `<th class="n">${esc(c)}</th>`).join("")}<th class="n">Total sqm</th><th class="n">Sheet sqft</th><th class="n">sqft @ 10.7639</th></tr></thead>
+      <tbody>${q.lines.map(l => `<tr class="${l.measured ? "" : "unm"}"><td class="mono">${esc(l.code)}</td><td>${esc(l.description)}${l.remarks ? ` <span class="chip warn">${esc(l.remarks)}</span>` : ""}</td><td>${esc(l.uom)}</td>
+        ${q.breakdown_columns.map(c => `<td class="n">${num(l.breakdown[c])}</td>`).join("")}<td class="n">${num(l.total_sqm)}</td><td class="n">${num(l.total_sqft)}</td><td class="n">${l.total_sqm != null && l.uom === "SQM" ? num(l.total_sqm * 10.7639) : "—"}</td></tr>`).join("")}
+      <tr class="gt"><td></td><td>Grand total</td><td></td>${q.breakdown_columns.map(c => `<td class="n">${num(q.lines.reduce((s, l) => s + (l.breakdown[c] || 0), 0))}</td>`).join("")}<td class="n">${num(q.grand_total_sqm)}</td><td class="n">${num(q.grand_total_sqft)}</td><td class="n">${q.grand_total_sqm != null ? num(q.grand_total_sqm * 10.7639) : "—"}</td></tr>
+      </tbody></table></div>` : `<div class="err">No quantity sheet could be read from the attachments.</div>`}
+  `;
+}
+$("#page-sub").textContent = PAGES.dash[1];
+$("#asof").textContent = "As of " + new Date().toLocaleDateString("en-IN", {day: "numeric", month: "short", year: "numeric"});
+// Shareable links: /#sample, /#emails, /#vendors …
+if (location.hash === "#sample") { showTab("read"); run(fetch("/api/samples/riverside")); }
+else if (location.hash.length > 1 && document.querySelector(`#tab-${CSS.escape(location.hash.slice(1))}`)) showTab(location.hash.slice(1));
+</script>
+</body>
+</html>

@@ -1,0 +1,672 @@
+[
+ {
+  "uid": "1011",
+  "received": "Sat, 21 Nov 2026 11:10:00 +0530",
+  "result": {
+   "email": {
+    "subject": "Waterproofing for toilets, kitchens and balconies, Greenfield Tower-1",
+    "sender": "Greenfield Site <greenfield.site@example.com>",
+    "date": "Sat, 21 Nov 2026 11:10:00 +0530",
+    "body": "Dear Sir,\n\nInternal waterproofing is needed for the toilets, kitchens and balconies of Vinayak Greenfield Tower-1, 2nd to 10th floor.\nBrickwork in the wet areas is complete, so work can start from 1 December 2026 and should finish by 15 January 2027.\nPlease float the enquiry. The quantity sheet will follow once the site measurement is done.\n\nRegards,\nSite Engineer, Vinayak Greenfield",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nInternal waterproofing is needed for the toilets, kitchens and balconies of Vinayak Greenfield Tower-1, 2nd to 10th floor.\nBrickwork in the wet areas is complete, so work can start from 1 December 2026 and should finish by 15 January 2027.\nPlease float the enquiry. The quantity sheet will follow once the site measurement is done.\n\nRegards,\nSite Engineer, Vinayak Greenfield"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Greenfield",
+     "quote": "Vinayak Greenfield"
+    },
+    "block": {
+     "value": "Tower 1",
+     "quote": "Greenfield Tower-1"
+    },
+    "work_type": {
+     "value": "Internal waterproofing",
+     "quote": "Internal waterproofing"
+    },
+    "contract_type": {
+     "value": "Work order (waterproofing work package)",
+     "quote": "Please float the enquiry."
+    },
+    "scope_areas": {
+     "values": [
+      "Toilets",
+      "Kitchens",
+      "Balconies"
+     ],
+     "quote": "the toilets, kitchens and balconies"
+    },
+    "floors": {
+     "value": "2nd to 10th floor",
+     "quote": "2nd to 10th floor"
+    },
+    "start": {
+     "value": "1 Dec 2026",
+     "quote": "work can start from 1 December 2026"
+    },
+    "finish": {
+     "value": "15 Jan 2027",
+     "quote": "should finish by 15 January 2027"
+    },
+    "requested_by": {
+     "value": "Site Engineer, Greenfield",
+     "quote": "Site Engineer, Vinayak Greenfield"
+    },
+    "requested_action": {
+     "value": "Float the enquiry",
+     "quote": "Please float the enquiry."
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [],
+     "quote": null
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [
+     {
+      "who": "Site Engineer",
+      "position": "Wet-area brickwork is done; float the waterproofing enquiry. Quantities to follow.",
+      "quote": "The quantity sheet will follow once the site measurement is done."
+     }
+    ],
+    "open_questions": [
+     "Floor and wall areas for toilets, kitchens and balconies are needed before vendors can price."
+    ]
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ },
+ {
+  "uid": "1010",
+  "received": "Sat, 21 Nov 2026 09:30:00 +0530",
+  "result": {
+   "email": {
+    "subject": "Roof waterproofing with brick bat coba, Lakeview Tower-C",
+    "sender": "Lakeview Site <lakeview.site@example.com>",
+    "date": "Sat, 21 Nov 2026 09:30:00 +0530",
+    "body": "Dear Sir,\n\nThe Tower-C main roof at Vinayak Lakeview is ready for waterproofing.\nWe need roof waterproofing with brick bat coba over the full roof area.\nWork should start by 10 December 2026. Please float the enquiry.\n\nRegards,\nSite Engineer, Vinayak Lakeview",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nThe Tower-C main roof at Vinayak Lakeview is ready for waterproofing.\nWe need roof waterproofing with brick bat coba over the full roof area.\nWork should start by 10 December 2026. Please float the enquiry.\n\nRegards,\nSite Engineer, Vinayak Lakeview"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Lakeview",
+     "quote": "Vinayak Lakeview"
+    },
+    "block": {
+     "value": "Tower C",
+     "quote": "Tower-C main roof"
+    },
+    "work_type": {
+     "value": "Roof waterproofing with brick bat coba",
+     "quote": "roof waterproofing with brick bat coba"
+    },
+    "contract_type": {
+     "value": "Work order (waterproofing work package)",
+     "quote": "Please float the enquiry."
+    },
+    "scope_areas": {
+     "values": [
+      "Main roof"
+     ],
+     "quote": "Tower-C main roof"
+    },
+    "floors": {
+     "value": "Roof",
+     "quote": "main roof"
+    },
+    "start": {
+     "value": "By 10 Dec 2026",
+     "quote": "Work should start by 10 December 2026"
+    },
+    "finish": {
+     "value": null,
+     "quote": null
+    },
+    "requested_by": {
+     "value": "Site Engineer, Lakeview",
+     "quote": "Site Engineer, Vinayak Lakeview"
+    },
+    "requested_action": {
+     "value": "Float the enquiry",
+     "quote": "Please float the enquiry."
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [],
+     "quote": null
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [],
+    "open_questions": [
+     "Roof area in sqm is needed before vendors can price.",
+     "Is the mumty roof included?"
+    ]
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [
+    {
+     "id": "missing-fields",
+     "severity": "warn",
+     "title": "Some basics aren't in the email",
+     "detail": "Not stated: finish date. Confirm with site before the tender document is drafted.",
+     "source": "Email"
+    }
+   ],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ },
+ {
+  "uid": "1009",
+  "received": "Fri, 20 Nov 2026 15:40:00 +0530",
+  "result": {
+   "email": {
+    "subject": "Nozzle grouting at UGR construction joints, Riverside",
+    "sender": "Riverside Site <riverside.site@example.com>",
+    "date": "Fri, 20 Nov 2026 15:40:00 +0530",
+    "body": "Dear Sir,\n\nDuring the leak test of the underground reservoir (UGR) at Vinayak Riverside, seepage was seen at the construction joints.\nPlease arrange nozzle grouting at the construction joints before the tank is filled again.\nSite wants the work done in the week of 30 November 2026.\n\nRegards,\nSite Engineer, Vinayak Riverside",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nDuring the leak test of the underground reservoir (UGR) at Vinayak Riverside, seepage was seen at the construction joints.\nPlease arrange nozzle grouting at the construction joints before the tank is filled again.\nSite wants the work done in the week of 30 November 2026.\n\nRegards,\nSite Engineer, Vinayak Riverside"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Riverside",
+     "quote": "Vinayak Riverside"
+    },
+    "block": {
+     "value": "UGR (underground reservoir)",
+     "quote": "underground reservoir (UGR)"
+    },
+    "work_type": {
+     "value": "Nozzle grouting at construction joints",
+     "quote": "nozzle grouting at the construction joints"
+    },
+    "contract_type": {
+     "value": "Work order",
+     "quote": "Please arrange nozzle grouting"
+    },
+    "scope_areas": {
+     "values": [
+      "UGR construction joints"
+     ],
+     "quote": "seepage was seen at the construction joints"
+    },
+    "floors": {
+     "value": null,
+     "quote": null
+    },
+    "start": {
+     "value": "Week of 30 Nov 2026",
+     "quote": "in the week of 30 November 2026"
+    },
+    "finish": {
+     "value": "Before the tank is filled again",
+     "quote": "before the tank is filled again"
+    },
+    "requested_by": {
+     "value": "Site Engineer, Riverside",
+     "quote": "Site Engineer, Vinayak Riverside"
+    },
+    "requested_action": {
+     "value": "Arrange nozzle grouting",
+     "quote": "Please arrange nozzle grouting"
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [],
+     "quote": null
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [
+     {
+      "who": "Site Engineer",
+      "position": "Leak test showed seepage at UGR construction joints; grout before refilling.",
+      "quote": "seepage was seen at the construction joints"
+     }
+    ],
+    "open_questions": [
+     "How many joints, or how many running metres, need grouting?"
+    ]
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ },
+ {
+  "uid": "1008",
+  "received": "Fri, 20 Nov 2026 10:05:00 +0530",
+  "result": {
+   "email": {
+    "subject": "Requirement: OPC 53 cement for Tower-1 slab casting",
+    "sender": "Riverside Site Store <riverside.store@example.com>",
+    "date": "Fri, 20 Nov 2026 10:05:00 +0530",
+    "body": "Dear Sir,\n\nPlease arrange 400 bags of OPC 53 grade cement for the Tower-1 9th floor slab casting at Vinayak Riverside.\nCasting is planned for 28 November 2026, so material is needed at site by 26 November 2026.\nCurrent stock is 60 bags.\n\nRegards,\nSite Store, Vinayak Riverside",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nPlease arrange 400 bags of OPC 53 grade cement for the Tower-1 9th floor slab casting at Vinayak Riverside.\nCasting is planned for 28 November 2026, so material is needed at site by 26 November 2026.\nCurrent stock is 60 bags.\n\nRegards,\nSite Store, Vinayak Riverside"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Riverside",
+     "quote": "Vinayak Riverside"
+    },
+    "block": {
+     "value": "Tower 1",
+     "quote": "Tower-1 9th floor slab casting"
+    },
+    "work_type": {
+     "value": "OPC 53 cement, 400 bags",
+     "quote": "400 bags of OPC 53 grade cement"
+    },
+    "contract_type": {
+     "value": "Purchase order (material)",
+     "quote": "Please arrange 400 bags"
+    },
+    "scope_areas": {
+     "values": [
+      "9th floor slab"
+     ],
+     "quote": "Tower-1 9th floor slab casting"
+    },
+    "floors": {
+     "value": "9th floor",
+     "quote": "9th floor slab casting"
+    },
+    "start": {
+     "value": "Needed at site by 26 Nov 2026",
+     "quote": "needed at site by 26 November 2026"
+    },
+    "finish": {
+     "value": "Casting on 28 Nov 2026",
+     "quote": "Casting is planned for 28 November 2026"
+    },
+    "requested_by": {
+     "value": "Site store, Riverside",
+     "quote": "Site Store, Vinayak Riverside"
+    },
+    "requested_action": {
+     "value": "Arrange the cement",
+     "quote": "Please arrange 400 bags of OPC 53 grade cement"
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [],
+     "quote": null
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [
+     {
+      "who": "Site store",
+      "position": "Needs 400 bags by 26 Nov for the 28 Nov casting.",
+      "quote": "material is needed at site by 26 November 2026"
+     }
+    ],
+    "open_questions": [
+     "Which brands are approved for structural concrete at Riverside?"
+    ]
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ },
+ {
+  "uid": "1006",
+  "received": "Wed, 18 Nov 2026 11:15:00 +0530",
+  "result": {
+   "email": {
+    "subject": "TMT bars 12 mm and 16 mm, Lakeview Tower-B",
+    "sender": "Lakeview Site <lakeview.site@example.com>",
+    "date": "Wed, 18 Nov 2026 11:15:00 +0530",
+    "body": "Dear Sir,\n\nRequirement for Vinayak Lakeview, Tower-B, 6th to 8th floor columns and beams:\nTMT Fe 550D, 12 mm: 9 MT\nTMT Fe 550D, 16 mm: 14 MT\nRequired in two lots, first lot by 30 November 2026.\nBar bending schedule is attached.\n\nRegards,\nQS & Billing, Vinayak Lakeview",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nRequirement for Vinayak Lakeview, Tower-B, 6th to 8th floor columns and beams:\nTMT Fe 550D, 12 mm: 9 MT\nTMT Fe 550D, 16 mm: 14 MT\nRequired in two lots, first lot by 30 November 2026.\nBar bending schedule is attached.\n\nRegards,\nQS & Billing, Vinayak Lakeview"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Lakeview",
+     "quote": "Vinayak Lakeview"
+    },
+    "block": {
+     "value": "Tower B",
+     "quote": "Tower-B"
+    },
+    "work_type": {
+     "value": "TMT Fe 550D bars, 23 MT",
+     "quote": "TMT Fe 550D"
+    },
+    "contract_type": {
+     "value": "Purchase order (material)",
+     "quote": "Requirement for Vinayak Lakeview"
+    },
+    "scope_areas": {
+     "values": [
+      "12 mm: 9 MT",
+      "16 mm: 14 MT"
+     ],
+     "quote": "TMT Fe 550D, 12 mm: 9 MT"
+    },
+    "floors": {
+     "value": "6th to 8th floor",
+     "quote": "6th to 8th floor columns and beams"
+    },
+    "start": {
+     "value": "First lot by 30 Nov 2026",
+     "quote": "first lot by 30 November 2026"
+    },
+    "finish": {
+     "value": null,
+     "quote": null
+    },
+    "requested_by": {
+     "value": "QS & Billing, Lakeview",
+     "quote": "QS & Billing, Vinayak Lakeview"
+    },
+    "requested_action": {
+     "value": "Supply in two lots",
+     "quote": "Required in two lots"
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [
+      "Bar bending schedule"
+     ],
+     "quote": "Bar bending schedule is attached."
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [],
+    "open_questions": [
+     "When is the second lot needed?"
+    ]
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [
+    {
+     "id": "attachment-missing",
+     "severity": "block",
+     "title": "The quantity sheet is missing or unreadable",
+     "detail": "The email says quantities are attached, but no Excel quantity sheet could be read. Ask site to resend it as .xlsx.",
+     "source": "Attachments: none"
+    },
+    {
+     "id": "missing-fields",
+     "severity": "warn",
+     "title": "Some basics aren't in the email",
+     "detail": "Not stated: finish date. Confirm with site before the tender document is drafted.",
+     "source": "Email"
+    }
+   ],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ },
+ {
+  "uid": "1004",
+  "received": "Mon, 16 Nov 2026 09:50:00 +0530",
+  "result": {
+   "email": {
+    "subject": "Scaffolding hire for facade work, Lakeview Tower-A",
+    "sender": "Lakeview Site <lakeview.site@example.com>",
+    "date": "Mon, 16 Nov 2026 09:50:00 +0530",
+    "body": "Dear Sir,\n\nFacade painting of Lakeview Tower-A starts on 7 December 2026.\nWe need cuplock scaffolding on hire for the north and east faces, ground to 14th floor, for about 10 weeks.\nPlease float the enquiry. Erection and dismantling to be in the vendor's scope.\n\nRegards,\nSite Engineer, Vinayak Lakeview",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nFacade painting of Lakeview Tower-A starts on 7 December 2026.\nWe need cuplock scaffolding on hire for the north and east faces, ground to 14th floor, for about 10 weeks.\nPlease float the enquiry. Erection and dismantling to be in the vendor's scope.\n\nRegards,\nSite Engineer, Vinayak Lakeview"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Lakeview",
+     "quote": "Vinayak Lakeview"
+    },
+    "block": {
+     "value": "Tower A",
+     "quote": "Lakeview Tower-A"
+    },
+    "work_type": {
+     "value": "Cuplock scaffolding on hire",
+     "quote": "cuplock scaffolding on hire"
+    },
+    "contract_type": {
+     "value": "Work order (hire with erection and dismantling)",
+     "quote": "Erection and dismantling to be in the vendor's scope."
+    },
+    "scope_areas": {
+     "values": [
+      "North face",
+      "East face"
+     ],
+     "quote": "for the north and east faces"
+    },
+    "floors": {
+     "value": "Ground to 14th floor",
+     "quote": "ground to 14th floor"
+    },
+    "start": {
+     "value": "7 Dec 2026",
+     "quote": "starts on 7 December 2026"
+    },
+    "finish": {
+     "value": "About 10 weeks of hire",
+     "quote": "for about 10 weeks"
+    },
+    "requested_by": {
+     "value": "Site Engineer, Lakeview",
+     "quote": "Site Engineer, Vinayak Lakeview"
+    },
+    "requested_action": {
+     "value": "Float the enquiry",
+     "quote": "Please float the enquiry."
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [],
+     "quote": null
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [],
+    "open_questions": [
+     "Face areas in sqm are needed for vendors to price hire per sqm per month."
+    ]
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ },
+ {
+  "uid": "1003",
+  "received": "Fri, 13 Nov 2026 12:20:00 +0530",
+  "result": {
+   "email": {
+    "subject": "Tile adhesive, Greenfield Tower-3 bathrooms",
+    "sender": "Greenfield Store <greenfield.store@example.com>",
+    "date": "Fri, 13 Nov 2026 12:20:00 +0530",
+    "body": "Dear Sir,\n\nPlease procure 650 bags (20 kg) of polymer tile adhesive, type C2TE, for the bathroom wall tiling in Greenfield Tower-3.\nDelivery needed in the first week of December 2026.\n\nRegards,\nSite Store, Vinayak Greenfield",
+    "thread": [
+     {
+      "header": null,
+      "body": "Dear Sir,\n\nPlease procure 650 bags (20 kg) of polymer tile adhesive, type C2TE, for the bathroom wall tiling in Greenfield Tower-3.\nDelivery needed in the first week of December 2026.\n\nRegards,\nSite Store, Vinayak Greenfield"
+     }
+    ],
+    "attachments": []
+   },
+   "requirement": {
+    "project": {
+     "value": "Vinayak Greenfield",
+     "quote": "Vinayak Greenfield"
+    },
+    "block": {
+     "value": "Tower 3",
+     "quote": "Greenfield Tower-3"
+    },
+    "work_type": {
+     "value": "Polymer tile adhesive C2TE, 650 x 20 kg bags",
+     "quote": "650 bags (20 kg) of polymer tile adhesive, type C2TE"
+    },
+    "contract_type": {
+     "value": "Purchase order (material)",
+     "quote": "Please procure 650 bags"
+    },
+    "scope_areas": {
+     "values": [
+      "Bathroom wall tiling"
+     ],
+     "quote": "bathroom wall tiling"
+    },
+    "floors": {
+     "value": null,
+     "quote": null
+    },
+    "start": {
+     "value": "First week of Dec 2026",
+     "quote": "first week of December 2026"
+    },
+    "finish": {
+     "value": null,
+     "quote": null
+    },
+    "requested_by": {
+     "value": "Site store, Greenfield",
+     "quote": "Site Store, Vinayak Greenfield"
+    },
+    "requested_action": {
+     "value": "Procure the adhesive",
+     "quote": "Please procure 650 bags"
+    },
+    "vendor_named": {
+     "value": null,
+     "quote": null
+    },
+    "vendor_named_basis": {
+     "value": null,
+     "quote": null
+    },
+    "attachments_referenced": {
+     "values": [],
+     "quote": null
+    },
+    "exclusions": {
+     "values": [],
+     "quote": null
+    },
+    "thread": [],
+    "open_questions": []
+   },
+   "dropped_fields": [],
+   "quantities": null,
+   "checks": [
+    {
+     "id": "missing-fields",
+     "severity": "warn",
+     "title": "Some basics aren't in the email",
+     "detail": "Not stated: finish date. Confirm with site before the tender document is drafted.",
+     "source": "Email"
+    }
+   ],
+   "extraction_mode": "replay",
+   "model": null
+  }
+ }
+]
