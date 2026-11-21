@@ -66,7 +66,7 @@ def test_bad_login_explains_app_password():
 def test_sync_without_key_saves_and_retries_later(monkeypatch):
     monkeypatch.setattr(extract, "has_credentials", lambda: False)
     out = mailbox.sync(CFG, imap_factory=FakeImap)
-    assert out == {"fetched": 2, "read": 0, "failed": 0, "skipped": 0, "waiting_for_key": 2}
+    assert out == {"fetched": 2, "read": 0, "failed": 0, "skipped": 0, "site_replies": 0, "waiting_for_key": 2}
     assert {i["status"] for i in mailbox.list_inbox()} == {"needs_key"}
 
     # A key appears: the same two emails are read on the next sync, and not again after that.

@@ -13,7 +13,7 @@ import os
 import re
 import smtplib
 from email.message import EmailMessage
-from email.utils import parseaddr
+from email.utils import make_msgid, parseaddr
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -138,9 +138,9 @@ def can_send() -> dict:
 
 
 def deliver(to: str, subject: str, body: str, *, mark_only: bool = False, smtp_factory=smtplib.SMTP_SSL,
-            attachments: list[Path] = ()) -> tuple[str, str]:
+            attachments: list[Path] = (), headers: dict[str, str] | None = None) -> tuple[str, str]:
     """Send one email (with any attached files) to a test inbox, or only check it, with mark_only.
-    Returns (address, via)."""
+    `headers` adds threading headers (Message-ID, In-Reply-To, References). Returns (address, via)."""
     addr = parseaddr(to)[1]
     if not addr or "@" not in addr:
         raise SendError("Give one email address to send to.")
@@ -157,6 +157,9 @@ def deliver(to: str, subject: str, body: str, *, mark_only: bool = False, smtp_f
         raise SendError("The subject can't contain line breaks.")
     msg = EmailMessage()
     msg["From"], msg["To"], msg["Subject"] = user, addr, subject
+    for k, v in (headers or {}).items():
+        if v and not any(ch in v for ch in "\r\n"):
+            msg[k] = v
     msg.set_content(body)
     for p in attachments:
         kind = (mimetypes.guess_type(p.name)[0] or "application/octet-stream").split("/", 1)
@@ -175,8 +178,15 @@ def send(uid: str, to: str, subject: str, body: str, *, mark_only: bool = False,
     """The reply to the site, sent (test inboxes only) or marked as sent, and recorded on the case
     with what it asked (so a question added later shows the case needs another reply)."""
     case = case or F.build_case(uid)
-    addr, via = deliver(to, subject, body, mark_only=mark_only, smtp_factory=smtp_factory)
-    sent = F.SentReply(to=addr, subject=subject, body=body, at=F.now(), via=via, asked=F.asked_ids(case))
+    # A Message-ID of our own, kept on the case: the site's answer quotes it in In-Reply-To, which is how
+    # procurement/cases/site_reply.match_case links the answer back here instead of opening a new requirement.
+    domain = (os.environ.get("GMAIL_ADDRESS") or "").rpartition("@")[2] or None
+    mid = make_msgid(domain=domain)
+    orig = (F.record(uid).get("message_id") or "").strip()
+    thread = {"Message-ID": mid, "In-Reply-To": orig, "References": orig}
+    addr, via = deliver(to, subject, body, mark_only=mark_only, smtp_factory=smtp_factory, headers=thread)
+    sent = F.SentReply(to=addr, subject=subject, body=body, at=F.now(), via=via, asked=F.asked_ids(case),
+                       message_id=mid if via == "smtp" else None)
     state = F.load_state(uid)
     state.setdefault("replies", []).append(sent.model_dump())
     state.pop("redecided", None)

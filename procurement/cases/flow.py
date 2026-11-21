@@ -90,6 +90,7 @@ class SentReply(BaseModel):
     at: str
     via: Literal["smtp", "marked"]
     asked: list[str] | None = None  # line ids and "check:<id>" the reply covered (None: sent before this was kept)
+    message_id: str | None = None  # set on a sent email, so the answer can be linked back (site_reply.match_case)
 
 
 class SentRfq(SentReply):
@@ -116,6 +117,8 @@ class Case(BaseModel):
     quotes_in: int = 0  # quotes in for the picked vendors (uploaded or from the tender folder)
     award: dict[str, dict] = {}  # category -> the vendor chosen, with the reason
     hod: dict | None = None  # the email to the HOD: to, subject, at, via, approved_by_hod_at
+    site_replies: list[dict] = []  # the site's answers (site_reply.SiteReply), oldest first
+    site_replied: bool = False  # the site answered after our last reply and lines are still open: review it
     headline: str
 
 
@@ -151,6 +154,12 @@ def _withdraw(state: dict) -> None:
     if state.get("hod"):
         state.setdefault("hod_history", []).append(state["hod"])
     state.pop("hod", None)
+
+
+def all_states() -> list[tuple[str, dict]]:
+    """(uid, saved state) for every case with decisions saved."""
+    d = cases_dir()
+    return [(p.stem, json.loads(p.read_text())) for p in sorted(d.glob("*.json"))] if d.exists() else []
 
 
 def save_state(uid: str, state: dict) -> None:
@@ -264,8 +273,10 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
     awarded = bool(approved and picked) and all(c in awards for c, ids in picks.items() if ids)
     last = (state.get("replies") or [None])[-1]
     new_qs = bool(last) and asked_since(last, open_lines, blocking, state.get("redecided", []))
+    site = state.get("site_replies") or []
+    replied = bool(site) and (not last or site[-1]["at"] >= last["at"]) and bool(counts["to_reply"] or blocking)
     if counts["to_reply"] or blocking:
-        stage: Stage = "waiting_on_site" if last and not new_qs else "item_codes"
+        stage: Stage = "waiting_on_site" if last and not new_qs and not replied else "item_codes"
     elif not settled:
         stage = "item_codes"
     elif not approved:
@@ -302,7 +313,9 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
         bits = [f"{counts[k]} {w}" for k, w in (("conflict", "with a code conflict"), ("partial", "partly matched"), ("no_match", "with no item code")) if counts[k]]
         bits += [f"{len(blocking)} email problem{'s' * (len(blocking) != 1)} that stop{'s' * (len(blocking) == 1)} the tender"] if blocking else []
         headline = f"{settled} of {n} line{'s' * (n != 1)} ready. To ask the site: " + (", ".join(bits) or "nothing") + "."
-        if stage == "waiting_on_site":
+        if replied:
+            headline += " The site replied: review its answers below."
+        elif stage == "waiting_on_site":
             headline += " Reply sent; waiting on the site."
         elif new_qs:
             headline += " New questions since the last reply: send another."
@@ -311,7 +324,8 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
                 lines=lines, email_checks=checks, stage=stage, counts=counts,
                 replies=[SentReply(**r) for r in state.get("replies", [])], approved_at=approved,
                 vendor_picks=picks if approved else {}, rfqs=rfqs, quotes_in=quotes_in,
-                award={c: a for c, a in awards.items() if picks.get(c)} if approved else {}, hod=hod or None, headline=headline)
+                award={c: a for c, a in awards.items() if picks.get(c)} if approved else {}, hod=hod or None,
+                site_replies=site, site_replied=replied, headline=headline)
 
 
 def asked_ids(case: Case) -> list[str]:

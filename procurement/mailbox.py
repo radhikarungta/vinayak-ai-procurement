@@ -4,6 +4,10 @@ Connects over IMAP with a Gmail app password (Google Account → Security → 2-
 App passwords). Messages are fetched with BODY.PEEK, so nothing is marked as read. Each result is
 saved to data/inbox/<uid>.json; a UID already saved is never processed again.
 
+An email that answers a reply we sent to the site (In-Reply-To / References carry our Message-ID, or
+the same subject from the address we wrote to) is not a new requirement: it is kept on that case as
+the site's answer (procurement/cases/site_reply) and saved here with status "site_reply".
+
 Before any model call, each email is checked against the email rules (procurement/email_rules).
 An email a rule blocks or holds is saved with status "skipped" and the decision, costs nothing,
 and is not retried. Delete its data/inbox/<uid>.json to have the next sync look at it again.
@@ -21,13 +25,15 @@ CLI:  uv run python -m procurement.mailbox
 
 from __future__ import annotations
 
+import email as emaillib
 import imaplib
 import json
 import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -159,6 +165,7 @@ def list_inbox() -> list[dict]:
                 "date": r.get("date"),
                 "status": r["status"],
                 "error": r.get("error"),
+                "case": r.get("case"),  # for a site's answer: the requirement it was attached to
                 # What the email rules decided ("process" | "block" | "hold"), None for older records.
                 "decision": (r.get("decision") or {}).get("decision"),
                 "reason": (r.get("decision") or {}).get("reason"),
@@ -181,15 +188,23 @@ def sync(cfg: MailConfig, imap_factory=imaplib.IMAP4_SSL, client=None) -> dict:
     STORE.mkdir(parents=True, exist_ok=True)
     live = extract.has_credentials() or client is not None
     # Emails saved while there was no API key are retried once a key is set. Skipped ones never are.
-    retry = {i["uid"] for i in list_inbox() if i["status"] == "needs_key"} if live else set()
+    inbox = list_inbox()
+    retry = {i["uid"] for i in inbox if i["status"] == "needs_key"} if live else set()
+    retry |= {i["uid"] for i in inbox if i["status"] == "site_reply_failed"}  # an answer that couldn't be kept: try again
     new = fetch_messages(cfg, saved_uids() - retry, imap_factory)
-    done = failed = skipped = 0
+    done = failed = skipped = answers = 0
     for uid, raw in new:
         mail = load_email(raw)
+        head = _headers(raw)
         facts = EmailFacts.from_email(mail, raw)
         decision = evaluate(rules, facts)
-        rec = {"uid": uid, "subject": mail.subject, "sender": mail.sender, "date": mail.date,
+        rec = {"uid": uid, "subject": mail.subject, "sender": mail.sender, "date": mail.date, "message_id": head["message-id"],
                "decision": decision, "facts": facts.as_dict() | {"body": facts.body[:20000]}}
+        # A blocked sender never reaches a case. Otherwise an answer to our reply is kept on its case.
+        if decision["decision"] != "block" and _site_reply(uid, mail, head, rec, client if live else None):
+            answers += 1
+            _path(uid).write_text(json.dumps(rec, indent=2))
+            continue
         if decision["decision"] != "process":
             rec |= {"status": "skipped", "error": decision["reason"]}
             skipped += 1
@@ -205,8 +220,45 @@ def sync(cfg: MailConfig, imap_factory=imaplib.IMAP4_SSL, client=None) -> dict:
             else:
                 _keep_sheet(uid, mail, rec["result"])
         _path(uid).write_text(json.dumps(rec, indent=2))
-    return {"fetched": len(new), "read": done, "failed": failed, "skipped": skipped,
-            "waiting_for_key": len(new) - done - failed - skipped}
+    return {"fetched": len(new), "read": done, "failed": failed, "skipped": skipped, "site_replies": answers,
+            "waiting_for_key": len(new) - done - failed - skipped - answers}
+
+
+def _headers(raw: bytes) -> dict[str, str | None]:
+    try:
+        msg = emaillib.message_from_bytes(raw if isinstance(raw, bytes) else raw.encode())
+    except Exception:
+        return {"message-id": None, "in-reply-to": None, "references": None}
+    get = lambda k: (str(msg.get(k)).strip() or None) if msg.get(k) else None  # noqa: E731
+    return {"message-id": get("Message-ID"), "in-reply-to": get("In-Reply-To"), "references": get("References")}
+
+
+def _iso(date_header: str | None) -> str | None:
+    """The email's own Date as UTC ISO (what flow compares with our reply's time), None if unreadable."""
+    try:
+        d = parsedate_to_datetime(date_header) if date_header else None
+        return d.astimezone(timezone.utc).isoformat(timespec="seconds") if d and d.tzinfo else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _site_reply(uid: str, mail, head: dict, rec: dict, client) -> bool:
+    """If this email answers our reply to the site, keep it on that case (and read it) and say so."""
+    from .cases import site_reply as SR  # noqa: PLC0415 - cases.flow imports this module
+
+    case_uid = SR.match_case(in_reply_to=head["in-reply-to"], references=head["references"], subject=mail.subject,
+                             sender=mail.sender, message_id=head["message-id"])
+    if not case_uid:
+        return False
+    try:
+        r = SR.record(case_uid, mail.body, sender=mail.sender, subject=mail.subject, via="email",
+                      message_id=head["message-id"], at=_iso(mail.date), client=client)
+    except Exception as e:  # noqa: BLE001 - one bad answer must not stop the sync; it is retried on the next one
+        log.warning("Site reply %s for case %s couldn't be kept: %s", uid, case_uid, e)
+        rec |= {"status": "site_reply_failed", "case": case_uid, "error": f"Answer to requirement {case_uid}, not kept yet (tried again on the next sync): {e}"}
+        return True
+    rec |= {"status": "site_reply", "case": case_uid, "error": None if r.read != "failed" else r.error}
+    return True
 
 
 def _keep_sheet(uid: str, mail, result: dict) -> None:

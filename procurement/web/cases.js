@@ -179,8 +179,46 @@
         ${sent ? `<div class="small"><b>Sent</b><ul style="margin:4px 0 0;padding-left:18px">${sent}</ul></div>` : ""}</div>`
       : sent ? `<div class="panel small"><b>Replies to the site</b><ul style="margin:4px 0 0;padding-left:18px">${sent}</ul></div>` : "";
     return `<section class="sec" id="s2"><div class="sh"><h3>2 · Item code mapping</h3><span class="small muted">${esc(c.headline)}</span></div>
+      ${siteAnswers(c)}
       ${c.lines.map(lineCard).join("") || `<div class="empty">No requirement lines were read from this email.</div>`}
-      ${reply}</section>`;
+      ${reply}${pasteBox(c)}</section>`;
+  }
+  // The site's latest answer, read into one suggestion per question. A person accepts each one.
+  const SUGG = {use_code: ["Use", "good"], skip: ["Leave out", "warn"], resolved: ["Sorted", "good"], unclear: ["Unclear", ""]};
+  function siteAnswers(c) {
+    const all = c.site_replies || [];
+    if (!all.length) return "";
+    const i = all.length - 1, r = all[i];
+    const lines = Object.fromEntries(c.lines.map(l => [l.id, l]));
+    const checks = Object.fromEntries(c.email_checks.map(k => ["check:" + k.id, k]));
+    const rows = r.suggestions.map(sg => {
+      const ln = lines[sg.ref], ck = checks[sg.ref];
+      const what = ln ? ln.text : ck ? ck.title : sg.ref;
+      const open = ln ? ln.status === "to_reply" : ck ? !ck.resolved : false;
+      const [label, tone] = SUGG[sg.action];
+      const act = sg.action === "unclear" || !open ? ""
+        : `<button class="btn primary" style="padding:2px 10px" data-accept="${esc(sg.ref)}" data-sa="${esc(sg.action)}" data-sc="${esc(sg.codes.join(","))}" data-sn="${esc(sg.note || "")}">Accept</button>`;
+      return `<li><div class="top" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <b>${esc(what)}</b><span><span class="chip ${tone}">${label}${sg.codes.length ? " " + sg.codes.map(esc).join(" + ") : ""}</span> ${open ? act : `<span class="chip">done</span>`}</span></div>
+        ${sg.quote ? `<span class="q">“${esc(sg.quote)}”</span>` : ""}
+        ${sg.note ? `<div class="small">${esc(sg.note)}</div>` : ""}
+        ${sg.why_unclear ? `<div class="small muted">Not used: ${esc(sg.why_unclear)}</div>` : sg.action === "unclear" ? `<div class="small muted">The reply doesn't settle this: decide below or ask again.</div>` : ""}</li>`;
+    }).join("");
+    const status = r.read === "read" ? "" : `<p class="small muted">${esc(r.error || (r.read === "nothing_asked" ? "Nothing was open when it came in." : ""))}
+        ${r.read === "needs_key" || r.read === "failed" ? `<button class="btn" style="padding:2px 8px;margin-left:6px" data-reread="${i}">Read again</button>` : ""}</p>`;
+    return `<div class="panel ${c.site_replied ? "agent" : ""}"><div class="eyebrow">The site's answer${all.length > 1 ? ` (latest of ${all.length})` : ""}</div>
+      <div class="small muted">${esc(when(r.at))} · ${r.via === "email" ? "by email" : "pasted in"}${r.sender ? " · " + esc(r.sender) : ""}
+        ${r.read === "read" ? `<button class="btn" style="padding:2px 8px;margin-left:6px" data-reread="${i}" title="Read it against the questions open now">Read again</button>` : ""}</div>
+      <details><summary>The reply</summary><p class="body">${esc(r.body)}</p></details>
+      ${rows ? `<p class="small muted">Suggested from the reply. Check each one; nothing changes until you accept.</p><ul class="sum" style="list-style:none;padding:0;gap:10px">${rows}</ul>` : ""}
+      ${status}</div>`;
+  }
+  function pasteBox(c) {
+    if (!(c.replies.length || c.draft.needed)) return "";
+    return `<details class="panel"><summary>The site answered by phone or WhatsApp? Paste its answer</summary>
+      <textarea data-paste placeholder="Paste the site's answer here" style="margin-top:8px"></textarea>
+      <div class="acts"><button class="btn" data-pastesend="1">Add the site's answer</button></div>
+      <p class="small muted">Answers by email are attached here on their own when the mailbox is synced.</p></details>`;
   }
 
   // ── 3 · approve ──
@@ -420,6 +458,17 @@
     if (b.dataset.jump) { active = b.dataset.jump; return drawCase(current); }
     if (b.dataset.use) return act(b, () => post(`${base}/lines/${encodeURIComponent(b.dataset.line)}`, {action: "use_code", codes: b.dataset.use.split(",")}));
     if (b.dataset.act) return act(b, () => post(`${base}/lines/${encodeURIComponent(b.dataset.line)}`, {action: b.dataset.act}));
+    if (b.dataset.accept) {
+      const ref = b.dataset.accept, a = b.dataset.sa;
+      if (a === "resolved") return act(b, () => post(`${base}/checks/${encodeURIComponent(ref.slice(6))}`, {resolved: true}));
+      return act(b, () => post(`${base}/lines/${encodeURIComponent(ref)}`, {action: a, codes: b.dataset.sc ? b.dataset.sc.split(",") : [], note: b.dataset.sn || null}));
+    }
+    if (b.dataset.reread) return act(b, () => post(`${base}/site-reply/${b.dataset.reread}/read`, {}));
+    if (b.dataset.pastesend) {
+      const t = root.querySelector("textarea[data-paste]").value;
+      if (!t.trim()) return flash(b, "Paste the site's answer first.");
+      return act(b, () => post(`${base}/site-reply`, {body: t}));
+    }
     if (b.dataset.check) return act(b, () => post(`${base}/checks/${encodeURIComponent(b.dataset.check)}`, {resolved: b.dataset.resolved === "1"}));
     if (b.dataset.approve) return act(b, () => post(`${base}/approve`, {approved: b.dataset.approve === "1"}));
     if (b.dataset.pick) {

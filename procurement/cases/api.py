@@ -15,6 +15,7 @@ from . import flow as F
 from . import quotes as CQ
 from . import reply as R
 from . import rfq as Q
+from . import site_reply as SR
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 TITLE = "Requirement workflow"
@@ -149,6 +150,28 @@ class MailIn(BaseModel):
 def send_reply(uid: str, body: MailIn) -> dict:
     m = _master()
     _do(R.send, uid, body.to, body.subject, body.body, mark_only=body.mark_only, case=_case(uid, m))
+    return _full(_case(uid, m), m)
+
+
+class SiteReplyIn(BaseModel):
+    body: str
+    sender: str | None = None
+
+
+@router.post("/{uid}/site-reply")
+def paste_site_reply(uid: str, body: SiteReplyIn) -> dict:
+    """The site's answer pasted in by hand (it came by phone or WhatsApp, or the mail isn't connected)."""
+    m = _master()
+    _case(uid, m)
+    _do(SR.record, uid, body.body, sender=body.sender, via="pasted", master=m)
+    return _full(_case(uid, m), m)
+
+
+@router.post("/{uid}/site-reply/{index}/read")
+def reread_site_reply(uid: str, index: int) -> dict:
+    m = _master()
+    _case(uid, m)
+    _do(SR.reread, uid, index, master=m)
     return _full(_case(uid, m), m)
 
 

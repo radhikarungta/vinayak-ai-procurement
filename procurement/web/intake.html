@@ -247,6 +247,9 @@ function drawInbox(d) {
     <span class="s">${esc(i.subject || "(no subject)")}</span>
     <span class="m"><span>${esc((i.sender || "").replace(/<.*>/, "").trim())}</span><span>${esc((i.date || "").slice(0, 16))}</span>
     ${i.status === "read" ? `${i.blocking ? `<span class="chip bad">${i.blocking} stop</span>` : ""}${i.to_confirm ? `<span class="chip warn">${i.to_confirm} to confirm</span>` : ""}${!i.blocking && !i.to_confirm ? `<span class="chip good">clear</span>` : ""}`
+      : i.status === "site_reply" ? `<span class="chip good">site's answer → requirement ${esc(i.case || "")}</span>`
+      : i.status === "site_reply_failed" ? `<span class="chip bad">site's answer, not kept yet</span>`
+      : i.status === "skipped" ? `<span class="chip">skipped</span>`
       : i.status === "needs_key" ? `<span class="chip warn">needs API key</span>` : `<span class="chip bad">failed</span>`}</span></button></li>`).join("")
     : (d.connected ? `<li class="small muted">No mail yet. Press "Check for new mail".</li>` : "");
 }

@@ -9,3 +9,4 @@ def _isolated_email_rules(tmp_path, monkeypatch):
     monkeypatch.setenv("QUOTES_PACK", str(tmp_path / "no-pack"))  # never link the real tender folder's quotes
     monkeypatch.delenv("HOD_EMAIL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # .env has a real key: tests never go live
+    monkeypatch.setenv("CASES_DIR", str(tmp_path / "cases"))  # a synced reply is matched against saved cases: never the real ones
