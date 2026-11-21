@@ -1,0 +1,619 @@
+<title>Vinayak Procurement Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one work package, a six-step rail across the top, each step = input on the left, agent output on the right, IndustryPrime mapping underneath */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --sunk:#e8edef; --line:#d3dbdf;
+  --fg:#17232b; --muted:#5a6a74;
+  --accent:#0d6672; --accent-soft:#d7ecee; --on-accent:#ffffff;
+  --good:#1f7a43; --good-soft:#dcf1e3;
+  --warn:#9a5b00; --warn-soft:#fbecd2;
+  --bad:#b3261e; --bad-soft:#f9dedc;
+  --display:"Archivo",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --sunk:#1d2b34; --line:#2c3d47;
+  --fg:#e3eaee; --muted:#93a5af;
+  --accent:#4fb8c4; --accent-soft:#163d43; --on-accent:#0b1a1e;
+  --good:#6dcf93; --good-soft:#163524; --warn:#f0b45a; --warn-soft:#3a2a10; --bad:#f28b82; --bad-soft:#3d1c1a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --sunk:#1d2b34; --line:#2c3d47;
+  --fg:#e3eaee; --muted:#93a5af;
+  --accent:#4fb8c4; --accent-soft:#163d43; --on-accent:#0b1a1e;
+  --good:#6dcf93; --good-soft:#163524; --warn:#f0b45a; --warn-soft:#3a2a10; --bad:#f28b82; --bad-soft:#3d1c1a;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:1.9rem;font-weight:800}
+h2{font-size:1.3rem;font-weight:700}
+h3{font-size:1rem;font-weight:700}
+p{margin:0}
+.mono,td.num,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+header.top{display:grid;grid-template-columns:1fr auto;gap:16px 32px;align-items:end;padding-bottom:20px;border-bottom:1px solid var(--line)}
+header.top .lede{max-width:64ch;color:var(--muted);margin-top:6px}
+.pkg{display:grid;grid-template-columns:repeat(3,auto);gap:4px 24px;font-size:.85rem}
+.pkg b{font-family:var(--mono);font-weight:500;display:block;font-size:.95rem}
+.rules{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;padding:3px 10px;border-radius:999px;background:var(--sunk);color:var(--fg);white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.acc{background:var(--accent-soft);color:var(--accent)}
+nav.rail{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:22px 0 18px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+nav.rail button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);min-width:0}
+nav.rail button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav.rail button .n{font-family:var(--mono);font-size:.75rem;color:var(--muted)}
+nav.rail button .t{font-weight:600;font-size:.88rem;line-height:1.25}
+nav.rail button .s{font-size:.72rem;color:var(--muted)}
+nav.rail button[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+nav.rail button[aria-current="true"] .n,nav.rail button[aria-current="true"] .s{color:var(--on-accent);opacity:.85}
+@media (max-width:820px){nav.rail{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.step-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;align-items:baseline;margin-bottom:14px}
+.step-head p{max-width:70ch;color:var(--muted);margin-top:4px}
+.cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px}
+.cols.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media (max-width:900px){.cols,.cols.even{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.panel.agent{border-color:var(--accent)}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button,.btn{font:inherit;font-size:.85rem;cursor:pointer;border-radius:6px;padding:6px 12px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.tabs button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn:focus-visible,.tabs button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.source{font-family:var(--mono);font-size:.8rem;white-space:pre-wrap;background:var(--sunk);border-radius:6px;padding:12px;max-height:340px;overflow:auto;line-height:1.55}
+.badge-sample{font-size:.7rem;padding:2px 8px;border-radius:4px;background:var(--warn-soft);color:var(--warn);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+dl.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;margin:0;font-size:.9rem}
+dl.kv dt{color:var(--muted)}
+dl.kv dd{margin:0}
+ul.flags{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+ul.flags li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;font-size:.88rem}
+.dot{width:9px;height:9px;border-radius:50%;margin-top:6px;background:var(--muted)}
+.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}.dot.good{background:var(--good)}.dot.acc{background:var(--accent)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunk);white-space:nowrap}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tr.total td{font-weight:600;background:var(--sunk)}
+td.l1{background:var(--good-soft);color:var(--good);font-weight:600}
+.ip{margin-top:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;padding:12px 14px;border-radius:8px;border:1px dashed var(--accent);font-size:.86rem}
+.ip .eyebrow{color:var(--accent)}
+.ip code{font-family:var(--mono);font-size:.8rem;background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:4px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:1000px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.grid4{grid-template-columns:minmax(0,1fr)}}
+.qcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.qcard h3{font-size:.98rem}
+.qcard .fmt{display:flex;flex-wrap:wrap;gap:6px}
+.field{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;font-size:.84rem;padding-top:6px;border-top:1px solid var(--line)}
+.field .k{color:var(--muted)}
+.field .v{grid-column:1 / -1}
+.field .src{font-family:var(--mono);font-size:.7rem;color:var(--muted);white-space:nowrap}
+.callout{padding:12px 14px;border-radius:8px;background:var(--warn-soft);color:var(--fg);font-size:.9rem;display:flex;flex-direction:column;gap:4px}
+.callout b{color:var(--warn)}
+.callout.acc{background:var(--accent-soft)}
+.callout.acc b{color:var(--accent)}
+.rank{display:flex;flex-direction:column;gap:10px}
+.rrow{display:grid;grid-template-columns:2rem minmax(0,1fr) 5rem;gap:12px;align-items:start;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.rrow .pos{font-family:var(--display);font-weight:800;font-size:1.4rem;color:var(--accent);line-height:1}
+.rrow .score{font-family:var(--mono);font-size:1.15rem;text-align:right}
+.bar{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;margin-top:6px;display:flex}
+.bar span{display:block;height:100%}
+.bar .p{background:var(--accent)}.bar .t{background:var(--warn)}.bar .h{background:var(--good)}
+.reasons{margin:6px 0 0;padding-left:18px;font-size:.84rem;color:var(--muted)}
+.ctrl{display:grid;grid-template-columns:minmax(0,1fr) 3rem;gap:4px 10px;align-items:center;font-size:.85rem}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select{font:inherit;font-size:.82rem;padding:3px 6px;border-radius:5px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.perf{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:6px 8px;align-items:center;font-size:.82rem}
+.perf .hd{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.memo{font-size:.92rem;display:flex;flex-direction:column;gap:12px}
+.memo .hdr{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 12px;font-size:.85rem;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.memo .hdr span:nth-child(odd){color:var(--muted)}
+.memo ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+textarea{font:inherit;font-size:.88rem;width:100%;min-height:70px;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.log{font-family:var(--mono);font-size:.78rem;background:var(--sunk);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.toggle button{font:inherit;font-size:.8rem;padding:5px 10px;border:0;background:var(--surface);color:var(--fg);cursor:pointer}
+.toggle button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+@media (prefers-reduced-motion: no-preference){.step{animation:in .25s ease-out}@keyframes in{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Vinayak Group · AI-assisted procurement · demo on real data</div>
+      <h1>From a site email to a comparative the HOD can sign</h1>
+      <p class="lede">One live work package, walked through all six steps. The agent reads, normalises and ranks. It does not select, order or pay. Every number below comes from the data pack.</p>
+      <div class="rules">
+        <span class="chip acc">Agent recommends · human decides</span>
+        <span class="chip">RFQs go to a test inbox only</span>
+        <span class="chip">Every ranking shows its reasons</span>
+      </div>
+    </div>
+    <div class="pkg">
+      <div><span class="eyebrow">Project</span><b>Vinayak Riverside</b></div>
+      <div><span class="eyebrow">Package</span><b>T-2 waterproofing</b></div>
+      <div><span class="eyebrow">BOQ area</span><b>37,504 sqft</b></div>
+      <div><span class="eyebrow">Lines</span><b>7 BOQ items</b></div>
+      <div><span class="eyebrow">Quotes in</span><b>4 vendors</b></div>
+      <div><span class="eyebrow">Window</span><b>Nov 26 – Jun 28</b></div>
+    </div>
+  </header>
+
+  <nav class="rail" id="rail" aria-label="Steps"></nav>
+  <main id="stage"></main>
+
+  <footer>
+    <span>Built for Vibe Coders Hackathon Ed. 3 (21 Nov 2026) on Vinayak Group's data pack. For this public version, vendor names, people, project and site names, quantities and rates have all been replaced with realistic stand-ins. The workflow, the checks and the trap in step 4 are as found in the real pack.</span>
+    <span>Agent outputs are pre-computed from the pack so the walkthrough runs offline. In the product they come from the IndustryPrime services named under each step.</span>
+  </footer>
+</div>
+
+<script>
+/* ───────────────────────── DATA (from the Vinayak pack) ───────────────────────── */
+const LINES = [
+  {id:1, wo:"WP.01", name:"Toilet floor", unit:"SQFT", qty:12618.40},
+  {id:2, wo:"WP.02", name:"Toilet wall (up to 450 mm)", unit:"SQFT", qty:10872.15},
+  {id:3, wo:"WP.03", name:"Toilet depression channel", unit:"RMT", qty:450.00},
+  {id:4, wo:"WP.04", name:"Kitchen & wash floor", unit:"SQFT", qty:1694.30},
+  {id:5, wo:"WP.05", name:"Kitchen & wash wall", unit:"SQFT", qty:1805.10},
+  {id:6, wo:"WP.06", name:"Balcony & sky terrace floor", unit:"SQFT", qty:8216.85},
+  {id:7, wo:"WP.07", name:"Balcony & sky terrace wall (up to 200 mm)", unit:"SQFT", qty:2296.95},
+];
+const OLDQ = [28600,24700,970,7130,1220,22300,10620]; // quantity set used by the three May quotes
+
+const V = [
+  { key:"nirmal", name:"Nirmal Sealtech Services", short:"Nirmal",
+    format:["Digital PDF","3 pages","Amounts filled"], date:"17 Nov 2026", fresh:true,
+    rates:[44,44,44,44,44,44,44], qtys:LINES.map(l=>l.qty), units:LINES.map(l=>l.unit),
+    fields:[
+      ["Quantity basis","Matches the tender BOQ sent 16 Nov","p.1–3",'good'],
+      ["Rate","₹44.00 on every line, incl. ₹44/RMT on the channel","p.1–3",''],
+      ["GST","Extra, as per Govt. norms","T&C 1",'good'],
+      ["Payment","Monthly RA bill paid in 7 days. Final bill in 15 days","T&C 7–8",'warn'],
+      ["Advance","50% material secured advance on supply to site","T&C 10",'warn'],
+      ["Client supplies","Cement, sand, screed, geotextile, power, water, accommodation, lockable store, hoisting, scaffolding","T&C 2–5",'warn'],
+      ["Validity / warranty","Neither stated","—",'warn'],
+    ],
+    terms:{score:60, reasons:["Only quote priced on the current BOQ","Asks for a 50% material advance","Wants scaffolding, hoisting and accommodation free, beyond Vinayak's standard","No validity or warranty stated"]},
+    perfNote:"Already doing the mock-up floor (email, 12 Nov). Record the leak-test result when it's done."
+  },
+  { key:"kesari", name:"Kesari Construction & Waterproofing", short:"Kesari",
+    format:["Digital PDF","6 pages","No amounts"], date:"21 May 2026",
+    rates:[32.5,32.5,32.5,32.5,32.5,32.5,32.5], qtys:OLDQ, units:["SQFT","SQFT","SQM","SQFT","SQFT","SQFT","SQFT"],
+    fields:[
+      ["Quantity basis","Older set (28,600 sqft toilet floor vs 12,618.40 in tender)","p.1",'bad'],
+      ["Rate","₹32.50 flat on every line","p.1–5",''],
+      ["Unit mismatch","Line 3 quoted per SQM. Tender says RMT. Treated as per RMT, pending confirmation","p.2",'bad'],
+      ["GST","18% extra","T&C 1",'good'],
+      ["Payment","25% with order. RA paid in 30 days, 18% p.a. interest on delay","T&C 2, 4, 15",'warn'],
+      ["Validity","45 days from 21 May, so it lapsed on 5 Jul 2026","T&C 13",'bad'],
+      ["Escalation","Chemical price increases passed on after the WO","T&C 14",'warn'],
+      ["Warranty","10 years on stamp paper, handed over after full payment","T&C 16",'good'],
+    ],
+    terms:{score:55, reasons:["Offer expired on 5 Jul 2026","25% advance clashes with Vinayak's terms","Open-ended chemical price escalation","Unit error on line 3","10-year written warranty (+)"]},
+    perfNote:"No record with Vinayak."
+  },
+  { key:"ganga", name:"Ganga Leak-Proof Solutions", short:"Ganga",
+    format:["Digital PDF","6 pages","Amounts filled"], date:"Undated (file created 21 May 2026)",
+    rates:[40,40,82,36,36,40,40], qtys:OLDQ, units:LINES.map(l=>l.unit),
+    fields:[
+      ["Quantity basis","Older set (same as Kesari and RM)","p.1",'bad'],
+      ["Rate","₹40 wet areas, ₹36 kitchen & wash, ₹82/RMT channel","p.1–6",''],
+      ["Their total","₹38,28,940 on their quantities (arithmetic checks out)","p.6",''],
+      ["GST","18% extra on bill value","note f",'good'],
+      ["Payment","\"Will fix after discussion\"","note h",'bad'],
+      ["Materials","Chemicals \"CICO and FOSROC\". Spec names Fosroc Brushbond RFX","note e",'warn'],
+      ["Validity / warranty","Neither stated","—",'warn'],
+    ],
+    terms:{score:50, reasons:["Payment terms left open","Quote is undated","May substitute CICO for the Fosroc spec","Priced on the older quantity set"]},
+    perfNote:"No record with Vinayak."
+  },
+  { key:"rm", name:"R.M. Construction", short:"RM Construction",
+    format:["Scanned","Handwritten rates","3 pages"], date:"15 May 2026 (signed 20 May)",
+    rates:[32,32,48,32,32,32,32], qtys:OLDQ, units:LINES.map(l=>l.unit),
+    fields:[
+      ["Quantity basis","Older set, printed on the form","p.1–3",'bad'],
+      ["Rate","₹32/sqft written by hand on 6 lines, ₹48/RMT on the channel","p.1–3 · read from scan",'warn'],
+      ["Read confidence","Medium. \"32/-\" and \"48/-\" are legible but handwritten. Check before use","scan",'warn'],
+      ["GST, payment, validity","Not stated. No terms page","—",'bad'],
+      ["On Vinayak's list","Yes, R M CONSTRUCTION is on the Lakeview contractor list","05_vendors",'good'],
+    ],
+    terms:{score:45, reasons:["No terms at all: GST, payment and validity unknown","Rates handwritten on a scan","Priced on the older quantity set"]},
+    perfNote:"Works for Vinayak at Lakeview (on contractor list). Scope and quality not recorded."
+  },
+];
+
+// Vinayak's six standard RFQ terms × vendor stance
+const STD = [
+  ["PF & ESI registration", {nirmal:"silent",kesari:"silent",ganga:"silent",rm:"silent"}],
+  ["TDS as per Govt. norms", {nirmal:"silent",kesari:"silent",ganga:"silent",rm:"silent"}],
+  ["5% security deposit held 12 months", {nirmal:"clash: final bill in 15 days",kesari:"clash: warranty only after full payment",ganga:"silent",rm:"silent"}],
+  ["GST paid extra", {nirmal:"ok",kesari:"ok",ganga:"ok",rm:"silent"}],
+  ["Water & power at a point, labour hutment", {nirmal:"asks more",kesari:"asks more",ganga:"asks more",rm:"silent"}],
+  ["Safety PPE in contractor's scope", {nirmal:"silent",kesari:"silent",ganga:"silent",rm:"silent"}],
+];
+
+/* ───────────────────────── helpers ───────────────────────── */
+const inr = (n,d=0)=>"₹"+n.toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
+const lakh = n=>"₹"+(n/1e5).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})+" L";
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tenderTotal = v=>LINES.reduce((s,l,i)=>s+l.qty*v.rates[i],0);
+const quotedTotal = v=>v.qtys.reduce((s,q,i)=>s+q*v.rates[i],0);
+
+/* ───────────────────────── state ───────────────────────── */
+const S = {
+  step: 0, src: "email", extracted: {email:true}, rfqSent:false, basis:"tender",
+  w:{price:60, terms:25, perf:15},
+  perf:{nirmal:["u","u","u"], kesari:["u","u","u"], ganga:["u","u","u"], rm:["u","u","u"]},
+  decision:null, log:[]
+};
+try{ const s = localStorage.getItem("vpd-step"); if(s!==null) S.step = Math.min(5, +s||0); }catch(e){}
+
+/* ───────────────────────── steps ───────────────────────── */
+const STEPS = [
+  {t:"Capture the requirement", s:"SOP 01–03", render:step1},
+  {t:"Match item codes", s:"ERP codes", render:step2},
+  {t:"Draft & send RFQs", s:"SOP 04–05", render:step3},
+  {t:"Read & normalise quotes", s:"SOP 06", render:step4},
+  {t:"Comparative statement", s:"SOP 06–07", render:step5},
+  {t:"Recommend to HOD", s:"SOP 08", render:step6},
+];
+
+function ipBox(rows){
+  return `<div class="ip"><span class="eyebrow">In IndustryPrime</span><span></span>${rows.map(([a,b])=>`<span class="muted small">${a}</span><span>${b}</span>`).join("")}</div>`;
+}
+
+/* STEP 1 */
+const SOURCES = {
+  email:{label:"Email (real)", sample:false, text:
+`SUBJECT: WO Requirement of Waterproofing works, Nirmal at Tower-2
+FROM: Vinayak Riverside (QS & Billing)  ·  11 Nov 2026
+ATTACHMENT: T2_waterproofing_quantities.xlsx
+
+Please find attached the waterproofing quantities for Tower 2,
+broken down by floor and flat.
+
+As discussed in our meeting on November 3, 2026, the MD advised
+engaging Nirmal for the internal waterproofing work (including
+all toilets/W.C., kitchen, wash area, balcony, open terrace, and
+F.R.P.) for Tower 2, covering the ground floor, 1st floor, and 3rd
+floor through typical floors.
+
+The work is scheduled to begin in November 2026 and is expected to
+be completed by June 2028. Please issue the Work Order (WO).
+
+  ↳ Reply, Contracts & Planning, 12 Nov:
+  "...contractor shall be finalised after proper evaluation and
+  comparative analysis of the received tenders... For the mock-up
+  floor, the work shall be carried out by Nirmal as approved."`},
+  whatsapp:{label:"WhatsApp text", sample:true, text:
+`[11/11/26, 7:12 pm] Site QS (Riverside):
+Sir T2 waterproofing — toilet, kitchen, wash, balcony, FRP
+GF + 1st + 3rd flr onwards all typical
+qty sheet sent on mail
+start this month, finish jun 28
+pls issue WO 🙏
+[11/11/26, 7:13 pm] Site QS (Riverside):
+<attached: T2_waterproofing_quantities.xlsx>`},
+  voice:{label:"Voice note", sample:true, text:
+`🎙 0:41 · transcribed (Bengali-English)
+
+"Haan sir, Riverside Tower two-er waterproofing-er jonno bolchhi.
+Toilet, kitchen, wash area, balcony aar FRP — sob internal.
+Ground floor, first floor, aar third floor theke typical floor
+porjonto. Quantity sheet mail kore diyechhi. November-e start,
+June twenty-eight-e shesh. Mock-up floor Nirmal korchhe.
+WO ta please issue kore din."`}
+};
+function step1(){
+  const src = SOURCES[S.src];
+  const done = S.extracted[S.src];
+  const conf = {email:"High", whatsapp:"High (quantities joined from the emailed sheet)", voice:"Medium (transcript; quantities joined from the sheet)"}[S.src];
+  return `
+  <div class="step-head"><div><h2>1 · Capture the requirement</h2>
+  <p>Requirements reach the back office as email, WhatsApp or a voice note. The agent turns any of them into one structured requirement and checks it against the site's quantity sheet before anyone floats a tender.</p></div>
+  <span class="chip">Vinayak SOP steps 01–03: receive BOQ, check, get it corrected</span></div>
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-h"><span class="eyebrow">Incoming</span>
+        <div class="tabs" role="group" aria-label="Source">${Object.entries(SOURCES).map(([k,v])=>`<button data-src="${k}" aria-pressed="${S.src===k}">${v.label}</button>`).join("")}</div></div>
+      ${src.sample?`<span class="badge-sample">Made-up sample</span>`:""}
+      <div class="source">${esc(src.text)}</div>
+      <button class="btn primary" id="extract" ${done?"disabled":""}>${done?"Extracted":"Extract requirement"}</button>
+    </section>
+    <section class="panel agent">
+      <div class="panel-h"><span class="eyebrow">Structured requirement</span>${done?`<span class="chip acc">Confidence: ${conf}</span>`:""}</div>
+      ${done?`
+      <dl class="kv">
+        <dt>Project</dt><dd>Vinayak Riverside, Tower-2</dd>
+        <dt>Work</dt><dd>Internal waterproofing, labour + chemicals (work order)</dd>
+        <dt>Areas</dt><dd>Toilets & W.C., kitchen & wash, balconies & sky terrace, F.R.P. (4)</dd>
+        <dt>Floors</dt><dd>GF, 1F, 3F–23F typical (Flat D: 5F–21F). 310 toilets</dd>
+        <dt>Quantity</dt><dd class="mono">3,484.18 sqm · 37,504 sqft · 7 lines</dd>
+        <dt>Schedule</dt><dd>Start Nov 2026 · finish Jun 2028</dd>
+        <dt>Raised by</dt><dd>QS & Billing, Riverside site</dd>
+        <dt>Excluded</dt><dd>AC ledges. Mock-up floor (already given to Nirmal)</dd>
+      </dl>
+      <div class="eyebrow">BOQ check (SOP step 02)</div>
+      <ul class="flags">
+        <li><span class="dot bad"></span><span><b>The request names a vendor before tendering.</b> SOP step 05 needs at least 3 quotes, and Contracts replied the same way on 12 Nov. Routed to tender. The management preference is kept on file so the HOD sees it next to the comparative.</span></li>
+        <li><span class="dot warn"></span><span><b>Two lines are not measured.</b> The depression channel (WP.03) and nozzle grouting (WP.08) are blank on the site sheet. The tender carries 450 RMT for the channel as a provisional figure. Ask site to confirm.</span></li>
+        <li><span class="dot warn"></span><span><b>sqm → sqft factor differs.</b> The site sheet uses 10.76 and the tender uses 10.764, so the toilet floor reads 12,613.71 vs 12,618.40 sqft. Small, but it will show up in billing reconciliation.</span></li>
+        <li><span class="dot good"></span><span>Flat-wise and item-wise totals agree (3,484.18 sqm both ways).</span></li>
+      </ul>`:`<p class="muted">Press <b>Extract requirement</b> to see what the agent pulls out of this ${src.label.toLowerCase()}.</p>`}
+    </section>
+  </div>
+  ${ipBox([["Exists","Indents on web and mobile, with edit-at-approval for the approver (just shipped)."],["Add","WhatsApp and voice intake that pre-fills a draft indent, plus the BOQ check above before the indent is approved."]])}`;
+}
+
+/* STEP 2 */
+const MATCHES = [
+  ["Toilet floor","WP.01","WATERPROOFING AT TOILET FLOOR","exact","Variants WP.01.A / WP.01.B also exist. Use the base code."],
+  ["Toilet wall (up to 450 mm)","WP.02","WATERPROOFING AT TOILET WALL (UPTO 450 MM HIGHT)","exact",""],
+  ["Toilet depression channel","WP.03","SUPPLY & APPLICATION OF WATERPROOFING COMPOUND ON TOILET DEPRESSION CHANNEL","exact",""],
+  ["Kitchen & wash floor","WP.04","WATERPROOFING AT KITCHEN FLOOR","partial","The ERP text says kitchen only. Scope now includes wash and utility. Widen the description or create WP.04.W."],
+  ["Kitchen & wash wall","WP.05","WATERPROOFING AT KITCHEN WALL","partial","Same as above."],
+  ["Balcony & sky terrace floor","WP.06","WATERPROOFING AT BALCONY FLOOR","partial","Sky terrace (double-height balcony) and F.R.P. are not in the ERP text."],
+  ["Balcony & sky terrace wall","WP.07","WATERPROOFING AT BALCONY WALL (UPTO 200 MM HIGHT)","exact","The site sheet measures the turn-up at 175 mm. It is within the 200 mm limit."],
+  ["Nozzle grouting (if required)","WP.08 ✕","PRESSURE GROUTING INSIDE R.C.C FLOOR & WALL","conflict","The site sheet calls nozzle grouting WP.08. In the ERP, WP.08 is pressure grouting. Nozzle grouting lives under WP.11.B, which also has a twin, WP.11.B_."],
+];
+const HYGIENE = [
+  ["bad","One code, two meanings","WP.04.B, WP.05.B, WP.06.B and WP.07.B each name two different items. The second \"-B\" block (rows 64–68) is shifted by one row: WP.04.B is Kitchen <i>floor</i> at row 24 and Kitchen <i>wall</i> at row 65."],
+  ["bad","Same code, different treatment","WP.EXP.01 is \"Polysulphide\" expansion-joint treatment at row 34 and \"Hypalon\" at row 69."],
+  ["warn","Exact repeats","W.P.01–W.P.05, WP.01.A–WP.07.A, W.P-.1, W.P-COBA, WP.11.B, W.P.08 and WP.RC each appear twice. The 76 rows hold only 58 distinct code–description pairs."],
+  ["warn","Near duplicates","WP.11.B vs WP.11.B_ (nozzle grouting) · WP.RC.1 vs WP.RC1 (pump charges) · STP_UGR_01 vs W.P.04 (neat cement punning) · STP_UGR vs W.P.03 (joint grouting)."],
+  ["acc","Inherited list","The sheet header says \"Water-proofing work-PRJ-07\". These codes were made for another project and reused at Riverside."],
+];
+function step2(){
+  const pill = m=>({exact:'<span class="chip good">Exact</span>',partial:'<span class="chip warn">Partial</span>',conflict:'<span class="chip bad">Conflict</span>'}[m]);
+  return `
+  <div class="step-head"><div><h2>2 · Match each line to an ERP item code</h2>
+  <p>Each BOQ line is matched against Vinayak's ERP code list (76 rows). The agent reuses a code when the meaning matches, suggests a new one when the scope has grown, and flags codes that clash.</p></div>
+  <span class="chip">8 lines · 4 exact · 3 partial · 1 conflict</span></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Requirement line</th><th>Code</th><th>ERP description</th><th>Match</th><th>Why</th></tr></thead>
+    <tbody>${MATCHES.map(m=>`<tr><td>${m[0]}</td><td class="mono">${m[1]}</td><td class="small">${m[2]}</td><td>${pill(m[3])}</td><td class="small">${m[4]||'<span class="muted">Same wording and scope.</span>'}</td></tr>`).join("")}</tbody>
+  </table></div>
+  <section class="panel agent" style="margin-top:16px">
+    <div class="panel-h"><span class="eyebrow">Code list health: fix before creating new codes</span><span class="chip bad">2 blocking</span></div>
+    <ul class="flags">${HYGIENE.map(h=>`<li><span class="dot ${h[0]}"></span><span><b>${h[1]}.</b> ${h[2]}</span></li>`).join("")}</ul>
+  </section>
+  ${ipBox([["Exists","Item master with an item-merge flow for combining duplicate items."],["Add","Suggest a match and warn about duplicates while someone creates a code, before the duplicate exists. Run the same check once over the whole ERP list."]])}`;
+}
+
+/* STEP 3 */
+const RFQV = [
+  ["Nirmal Sealtech Services","On Lakeview list · doing the mock-up floor","good","Waterproofing applicator"],
+  ["R M Construction","On Lakeview list · quoted this package in May","good","Waterproofing (from May quote)"],
+  ["Kesari Construction & Waterproofing","Quoted in May · not on Vinayak's list yet","warn","Waterproofing applicator"],
+  ["Ganga Leak-Proof Solutions","Quoted in May · not on Vinayak's list yet","warn","Waterproofing applicator"],
+  ["Aquaflow Environmental Systems","On Lakeview list · category unclear","muted","Probably water treatment. Ask before sending."],
+  ["Polychem Traders","On Lakeview list","muted","Probably a chemicals supplier, not an applicator. Skip."],
+];
+function step3(){
+  return `
+  <div class="step-head"><div><h2>3 · Draft and send RFQs</h2>
+  <p>Vinayak's contractor list has names only, with no category. The agent infers the category from past quotes and names, and asks when it isn't sure. The RFQ carries Vinayak's six standard terms and a fixed reply table, so step 4 gets cleaner input next time.</p></div>
+  <span class="chip">SOP 05: at least 3 vendors</span></div>
+  <div class="cols">
+    <section class="panel">
+      <span class="eyebrow">Suggested vendors · waterproofing</span>
+      <ul class="flags">${RFQV.map((r,i)=>`<li><span class="dot ${r[2]}"></span><span><label style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" id="rv${i}" ${i<4?"checked":""}><b>${r[0]}</b></label><span class="muted small">${r[1]} · ${r[3]}</span></span></li>`).join("")}</ul>
+      <div class="callout"><b>Why re-send to the May bidders</b><span>Kesari, Ganga and RM priced an older, larger quantity set. Kesari's offer lapsed on 5 Jul. All three need to re-quote on the 16 Nov BOQ.</span></div>
+    </section>
+    <section class="panel agent">
+      <div class="panel-h"><span class="eyebrow">Draft RFQ</span><span class="chip">To: rfq-test@sandbox.local</span></div>
+      <div class="source" style="max-height:none">SUBJECT: Quotation for waterproofing, Vinayak Riverside Tower-2 (BOQ dated 16 Nov 2026)
+
+Dear Sir,
+
+Please quote against the attached BOQ and specification
+(7 items, 37,504 sqft + 450 RMT). Quote on these quantities.
+Rates from earlier BOQs will not be compared.
+
+Vinayak's terms:
+ 1. PF & ESI registration required.
+ 2. TDS deducted as per Govt. norms.
+ 3. 5% security deposit, released 12 months after completion.
+ 4. GST paid extra.
+ 5. Water & electricity at one point, and labour hutment, provided.
+ 6. Safety PPE is in the contractor's scope.
+
+Please also state, in the reply table:
+ · rate per unit for each item (in the unit shown)
+ · offer validity · payment terms · any advance asked
+ · warranty period · mobilisation time · chemical brand
+
+Reply table: Item | Unit | Rate | Remarks</div>
+      <div class="actions">
+        <button class="btn primary" id="send" ${S.rfqSent?"disabled":""}>${S.rfqSent?"Sent to test inbox":"Send to test inbox"}</button>
+        <span class="muted small" style="align-self:center">${S.rfqSent?"4 RFQs queued to the sandbox inbox. No real vendor was emailed.":"Goes to the sandbox inbox only. Real vendors are never emailed."}</span>
+      </div>
+    </section>
+  </div>
+  ${ipBox([["Exists","RFQ creation with a vendor history ranker: approved bid > picked > quoted, with weight halving every year."],["Add","A category on each vendor (inferred, then confirmed by a person) and Vinayak's standard terms as an RFQ template."]])}`;
+}
+
+/* STEP 4 */
+function step4(){
+  return `
+  <div class="step-head"><div><h2>4 · Read and normalise the four quotes</h2>
+  <p>Four vendors sent four layouts, and one is a handwritten scan. Every value the agent extracts carries the page or clause it came from. Where a value is missing, the agent says so and leaves it blank.</p></div>
+  <span class="chip bad">3 of 4 quotes are on the wrong quantities</span></div>
+  <div class="callout" style="margin-bottom:14px"><b>The trap in this package</b><span>Kesari, Ganga and RM all priced the same older quantity set from May (28,600 sqft of toilet floor). Nirmal priced the tender BOQ (12,618.40 sqft). Add up the totals as quoted and the comparison is meaningless. Step 5 puts every rate on the tender quantities.</span></div>
+  <div class="grid4">${V.map(v=>`
+    <article class="qcard">
+      <h3>${v.name}</h3>
+      <div class="fmt">${v.format.map(f=>`<span class="chip">${esc(f)}</span>`).join("")}</div>
+      <div class="small muted">Dated ${v.date}</div>
+      ${v.fields.map(f=>`<div class="field"><span class="k">${f[0]}</span><span class="src">${f[2]}</span><span class="v">${f[3]?`<span class="dot ${f[3]}" style="display:inline-block;margin:0 6px 0 0"></span>`:""}${esc(f[1])}</span></div>`).join("")}
+    </article>`).join("")}</div>
+  <h3 style="margin:20px 0 8px">Against Vinayak's six standard terms</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Vinayak term</th>${V.map(v=>`<th>${v.short}</th>`).join("")}</tr></thead>
+    <tbody>${STD.map(([t,m])=>`<tr><td>${t}</td>${V.map(v=>{const s=m[v.key];const c=s==="ok"?"good":s==="silent"?"":s.startsWith("clash")?"bad":"warn";return `<td>${c?`<span class="chip ${c}">${esc(s)}</span>`:`<span class="muted small">silent</span>`}</td>`}).join("")}</tr>`).join("")}</tbody>
+  </table></div>
+  <p class="small muted" style="margin-top:8px">"Silent" means the quote doesn't mention the term. That goes on the negotiation checklist and doesn't count as a breach.</p>
+  ${ipBox([["Exists","Quotation entry and the QC advisor, with its checks: coverage, terms divergence, anti-fabrication (every value must trace to the source) and abstention (stay quiet when data is thin)."],["Add","PDF and scan reading that fills the same quote fields, so the existing checks run unchanged on Vinayak's quotes."]])}`;
+}
+
+/* STEP 5 */
+const PERFV = {u:null,g:90,m:60,p:20};
+function perfScore(k){ const vals=S.perf[k].map(x=>PERFV[x]).filter(x=>x!==null); return vals.length? vals.reduce((a,b)=>a+b,0)/vals.length : null; }
+function scored(){
+  const totals = V.map(tenderTotal); const min = Math.min(...totals);
+  const wsum = S.w.price+S.w.terms+S.w.perf || 1;
+  return V.map((v,i)=>{
+    const price = min/totals[i]*100;
+    const ph = perfScore(v.key);
+    const perf = ph===null?50:ph;
+    const score = (price*S.w.price + v.terms.score*S.w.terms + perf*S.w.perf)/wsum;
+    return {v, total:totals[i], price, terms:v.terms.score, perf, perfKnown:ph!==null, score};
+  }).sort((a,b)=>b.score-a.score);
+}
+function step5(){
+  const tender = S.basis==="tender";
+  const tot = V.map(v=> tender?tenderTotal(v):quotedTotal(v));
+  const lineMin = LINES.map((l,i)=>Math.min(...V.map(v=>v.rates[i])));
+  const r = scored();
+  const L1 = Math.min(...V.map(tenderTotal));
+  const nir = tenderTotal(V[0]);
+  return `
+  <div class="step-head"><div><h2>5 · Comparative statement</h2>
+  <p>Each vendor's rates are applied to the same tender quantities, so the totals compare like for like. Switch to "as quoted" to see the comparison you'd get by adding up each PDF's own numbers.</p></div>
+  <div class="toggle" role="group" aria-label="Quantity basis"><button data-basis="tender" aria-pressed="${tender}">Tender quantities</button><button data-basis="quoted" aria-pressed="${!tender}">As quoted</button></div></div>
+  ${tender?"":`<div class="callout" style="margin-bottom:12px"><b>This view misleads</b><span>Read as quoted, Nirmal looks about 46% cheaper than everyone else. On the same quantities it is the most expensive, by 37%.</span></div>`}
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>Item</th><th>Code</th><th class="num">Qty</th><th>Unit</th>${V.map(v=>`<th class="num">${v.short}<br><span style="text-transform:none;letter-spacing:0">rate · amount</span></th>`).join("")}</tr></thead>
+    <tbody>
+    ${LINES.map((l,i)=>`<tr><td class="mono">${l.id}</td><td>${l.name}</td><td class="mono">${l.wo}</td><td class="num">${tender?l.qty.toLocaleString("en-IN",{minimumFractionDigits:2}):"varies"}</td><td>${l.unit}</td>
+      ${V.map(v=>{const q=tender?l.qty:v.qtys[i];const isL1=v.rates[i]===lineMin[i];const unitFlag=v.units[i]!==l.unit?` <span class="chip bad" title="Quoted per ${v.units[i]}">${v.units[i]}?</span>`:"";
+        return `<td class="num ${isL1?"l1":""}">${v.rates[i].toFixed(2)}${unitFlag}<br><span class="muted">${inr(q*v.rates[i])}</span>${tender?"":`<br><span class="muted small">qty ${q.toLocaleString("en-IN")}</span>`}</td>`}).join("")}</tr>`).join("")}
+    <tr class="total"><td></td><td colspan="4">Total, excl. GST</td>${tot.map(t=>`<td class="num">${inr(t)}</td>`).join("")}</tr>
+    <tr><td></td><td colspan="4" class="muted">GST @ 18%</td>${tot.map(t=>`<td class="num muted">${inr(t*.18)}</td>`).join("")}</tr>
+    <tr class="total"><td></td><td colspan="4">Total, incl. GST</td>${tot.map(t=>`<td class="num">${inr(t*1.18)}</td>`).join("")}</tr>
+    </tbody></table></div>
+  <p class="small muted" style="margin-top:8px">Green = lowest rate on that line. Kesari's line 3 is read as per RMT and flagged until they confirm. Nirmal's own total (₹16,69,965.00) matches the recomputed figure to the paisa.</p>
+
+  <div class="cols" style="margin-top:18px">
+    <section class="panel">
+      <span class="eyebrow">Weights (the HOD can change these)</span>
+      ${[["price","Price"],["terms","Terms risk"],["perf","Past performance"]].map(([k,n])=>`<label class="ctrl" for="w-${k}"><span>${n}</span><span class="mono">${S.w[k]}%</span><input type="range" id="w-${k}" data-w="${k}" min="0" max="100" step="5" value="${S.w[k]}" style="grid-column:1/-1"></label>`).join("")}
+      <span class="eyebrow" style="margin-top:6px">Past performance · no history is recorded today</span>
+      <div class="perf"><span class="hd">Vendor</span><span class="hd">Quality</span><span class="hd">On time</span><span class="hd">Disputes</span>
+      ${V.map(v=>`<span>${v.short}</span>${[0,1,2].map(j=>`<select id="pf-${v.key}-${j}" data-pv="${v.key}" data-pj="${j}" aria-label="${v.short} ${["quality","on time","disputes"][j]}">${[["u","Unknown"],["g","Good"],["m","Mixed"],["p","Poor"]].map(([a,b])=>`<option value="${a}" ${S.perf[v.key][j]===a?"selected":""}>${b}</option>`).join("")}</select>`).join("")}`).join("")}
+      </div>
+      <p class="small muted">Unknown scores a neutral 50 and is labelled as unknown, never as zero. How to capture this going forward: three taps by the site engineer at each RA bill and at WO close, stored against vendor + item code. Nirmal's mock-up floor will be the first record.</p>
+    </section>
+    <section class="panel agent">
+      <div class="panel-h"><span class="eyebrow">Ranking · price on tender quantities</span><span class="small muted"><span style="color:var(--accent)">■</span> price <span style="color:var(--warn)">■</span> terms <span style="color:var(--good)">■</span> history</span></div>
+      <div class="rank">${r.map((x,i)=>{const ws=S.w.price+S.w.terms+S.w.perf||1;return `
+        <div class="rrow"><span class="pos">${i+1}</span>
+          <div><b>${x.v.name}</b> <span class="mono small muted">${lakh(x.total)} ex-GST</span>
+            <div class="bar"><span class="p" style="width:${x.price*S.w.price/ws}%"></span><span class="t" style="width:${x.terms*S.w.terms/ws}%"></span><span class="h" style="width:${x.perf*S.w.perf/ws}%"></span></div>
+            <ul class="reasons">
+              <li>Price: ${x.total===L1?"lowest total":`${((x.total/L1-1)*100).toFixed(1)}% above the lowest`} (${inr(x.total)}).</li>
+              ${x.v.terms.reasons.map(t=>`<li>${t}.</li>`).join("")}
+              <li>History: ${x.perfKnown?`entered by the HOD (${Math.round(x.perf)}/100).`:`none recorded. ${x.v.perfNote}`}</li>
+            </ul></div>
+          <span class="score">${x.score.toFixed(1)}</span></div>`}).join("")}</div>
+      <div class="callout acc"><b>What the numbers say</b><span>RM and Kesari are within ₹11,800 of each other at about ${lakh(L1)}. Nirmal is ${lakh(nir-L1)} higher before GST. Neither low quote can be awarded as it stands, because both are six months old and priced on other quantities.</span></div>
+    </section>
+  </div>
+  ${ipBox([["Exists","QC comparative with a deterministic landed-cost pick (on production) and AI advisory, running on haiku-4-5."],["Add","Work-order comparisons (rate × BOQ quantity, not PO lines), a quantity-basis check, and the past-performance score."]])}`;
+}
+
+/* STEP 6 */
+function step6(){
+  const r = scored(); const L1 = Math.min(...V.map(tenderTotal)); const nir = tenderTotal(V[0]);
+  const gap = nir-L1;
+  return `
+  <div class="step-head"><div><h2>6 · Recommendation to the HOD</h2>
+  <p>The agent writes the note and sends it to the approver. Approving, sending back or overriding is the HOD's call, and every decision is logged with a reason.</p></div>
+  <span class="chip acc">Agent recommends · HOD decides</span></div>
+  <div class="cols">
+    <section class="panel agent memo">
+      <div class="hdr"><span>To</span><span>HOD, Contracts & Planning</span><span>Re</span><span>Riverside Tower-2 internal waterproofing · 7 BOQ lines · 4 quotes</span><span>Ask</span><span>Approve a negotiation round. This note does not ask to award.</span></div>
+      <p><b>Recommendation:</b> Don't award yet. Ask RM Construction and Kesari to re-confirm their rates on the 16 Nov BOQ. Then take their rates to Nirmal as the benchmark.</p>
+      <ol>
+        <li><b>On the same quantities</b> the ranking is: ${r.map(x=>`${x.v.short} (${lakh(x.total)})`).join(", ")}. The ranking includes terms risk and uses neutral history scores.</li>
+        <li><b>The two lowest quotes are not usable as they stand.</b> RM's rates are handwritten on a scan with no terms page. Kesari's offer lapsed on 5 Jul and asks for a 25% advance. Both priced the May quantity set.</li>
+        <li><b>Nirmal is the only quote on the current BOQ</b>, and management prefers them (meeting, 3 Nov). At ₹44/sqft they are ${lakh(gap)} above the low quotes before GST (${lakh(gap*1.18)} with GST). Bringing them to ₹34/sqft would close most of that gap.</li>
+        <li><b>The mock-up floor is a free quality trial.</b> Record its leak test as Nirmal's first performance entry before the main award.</li>
+        <li><b>For negotiation (SOP 07):</b> drop the 50% material advance and the 25% advance. Hold the 5% security deposit for 12 months. Fix the chemical brand to Fosroc. Get a written warranty and a validity date.</li>
+      </ol>
+      <p class="small muted">Sources: 4 quotation PDFs, tender BOQ (16 Nov), site quantity sheet, emails of 11 and 12 Nov. Past performance: none recorded.</p>
+    </section>
+    <section class="panel">
+      <span class="eyebrow">HOD decision</span>
+      ${S.decision?`<div class="callout ${S.decision.kind==="approve"?"acc":""}"><b>${S.decision.label}</b><span>${esc(S.decision.note||"No note added.")}</span></div>`:`
+      <label for="note" class="small muted">Note (required when you send back or override)</label>
+      <textarea id="note" placeholder="e.g. Ask RM for a typed quote with GST and payment terms."></textarea>
+      <div class="actions">
+        <button class="btn primary" data-dec="approve">Approve negotiation round</button>
+        <button class="btn" data-dec="back">Send back to Contracts</button>
+        <button class="btn" data-dec="override">Override: pick a vendor</button>
+      </div>
+      <p class="small muted" id="decerr" hidden>Add a note first. A send-back or override needs a reason on record.</p>`}
+      <span class="eyebrow">Audit log</span>
+      <div class="log">${["21 Nov · agent · extracted requirement from email (11 Nov)","21 Nov · agent · matched 8 lines; 2 code-list conflicts raised","21 Nov · agent · 4 RFQs queued to test inbox"+(S.rfqSent?"":" (pending)"),"21 Nov · agent · read 4 quotes (1 scan); 3 on old quantities","21 Nov · agent · comparative built on tender quantities; note sent to HOD",...S.log].map(x=>`<span>${esc(x)}</span>`).join("")}</div>
+      ${S.decision?`<button class="btn" id="undo">Reset decision</button>`:""}
+    </section>
+  </div>
+  ${ipBox([["Exists","PO approval rules engine with per-PO chains, plus push notifications to the approvers whose turn it is."],["Add","Route a comparative and its recommendation through the same chain, so a work order follows the approval path a PO already does."]])}`;
+}
+
+/* ───────────────────────── render + events ───────────────────────── */
+const rail = document.getElementById("rail"), stage = document.getElementById("stage");
+function render(){
+  rail.innerHTML = STEPS.map((s,i)=>`<button data-step="${i}" aria-current="${S.step===i}"><span class="n">0${i+1}</span><span class="t">${s.t}</span><span class="s">${s.s}</span></button>`).join("");
+  stage.innerHTML = `<section class="step">${STEPS[S.step].render()}</section>
+    <div class="actions" style="justify-content:space-between;margin-top:20px">
+      <button class="btn" data-go="-1" ${S.step===0?"disabled":""}>← Previous step</button>
+      <button class="btn primary" data-go="1" ${S.step===5?"disabled":""}>Next step →</button></div>`;
+}
+document.addEventListener("click",e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  if(b.dataset.step!==undefined){ go(+b.dataset.step); }
+  else if(b.dataset.go){ go(S.step + +b.dataset.go); }
+  else if(b.dataset.src){ S.src=b.dataset.src; render(); }
+  else if(b.id==="extract"){ S.extracted[S.src]=true; render(); }
+  else if(b.id==="send"){ S.rfqSent=true; render(); }
+  else if(b.dataset.basis){ S.basis=b.dataset.basis; render(); }
+  else if(b.dataset.dec){
+    const note=(document.getElementById("note").value||"").trim(); const k=b.dataset.dec;
+    if(k!=="approve" && !note){ document.getElementById("decerr").hidden=false; return; }
+    const label={approve:"Approved: negotiation round with RM, Kesari and Nirmal",back:"Sent back to Contracts & Planning",override:"Overridden by HOD: vendor picked manually"}[k];
+    S.decision={kind:k,label,note}; S.log.push("21 Nov · HOD · "+label.split(":")[0].toLowerCase()+(note?" · \""+note+"\"":"")); render();
+  }
+  else if(b.id==="undo"){ S.decision=null; S.log=[]; render(); }
+});
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.dataset.w){ S.w[t.dataset.w]=+t.value; const y=window.scrollY; render(); window.scrollTo(0,y); document.getElementById(t.id)?.focus(); }
+});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.pv){ S.perf[t.dataset.pv][+t.dataset.pj]=t.value; const y=window.scrollY; render(); window.scrollTo(0,y); }
+});
+function go(i){ S.step=Math.max(0,Math.min(5,i)); try{localStorage.setItem("vpd-step",S.step)}catch(e){} render(); rail.scrollIntoView({block:"start",behavior:"smooth"}); }
+render();
+</script>
