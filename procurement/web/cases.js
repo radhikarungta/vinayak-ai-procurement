@@ -118,6 +118,10 @@
 .trk .wait span{border:1.5px dashed var(--muted);color:var(--fg)}
 .ovl{display:flex;gap:16px;flex-wrap:wrap;font-size:.76rem;color:var(--muted);margin-top:8px;align-items:center}
 .ovl .trk span{width:13px;height:13px;font-size:0}
+.simmenu{position:relative} .simmenu > summary{list-style:none;display:inline-block} .simmenu > summary::-webkit-details-marker{display:none}
+.simmenu .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;width:320px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
+.simmenu .menu button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:9px 10px;border-radius:7px;font-size:.88rem}
+.simmenu .menu button span{font-size:.78rem;color:var(--muted)} .simmenu .menu button:hover,.simmenu .menu button:focus-visible{background:var(--accent-soft)}
 .ovt{overflow:visible} .ovt table{table-layout:fixed;font-size:.8rem} .ovt th{white-space:normal;padding:6px}
 .ovt td{padding:6px;overflow-wrap:anywhere} .ovt td .chip{white-space:normal;overflow-wrap:break-word;padding:2px 7px;font-size:.74rem;border-radius:6px;line-height:1.35}
 .ovt th:first-child{width:40%} .ovt th:nth-child(2){width:180px} .ovt th:last-child{width:110px} .ovt td{vertical-align:middle}
@@ -781,7 +785,10 @@
       const needs = needsLine(items), shown = ovFilter ? items.filter(x => ovFilter.uids.includes(x.uid)) : items;
       el.innerHTML = needs + `<section class="panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <div class="eyebrow">${ovFilter ? `${shown.length} of ${items.length}` : items.length} requirement emails · newest first</div>
-          <div class="acts"><button class="btn" data-arrive="1" title="Demo: a new requirement email lands and the agent starts on it by itself">Simulate a new email</button>
+          <div class="acts"><details class="simmenu"><summary class="btn">Simulate a new email ▾</summary><div class="menu">
+            <button data-arrive="auto"><b>Agent runs it end to end</b><span>Sends, the site's answer and the quotes are simulated. Stops at the HOD email.</span></button>
+            <button data-arrive="checkpoints"><b>Agent runs it, asks you twice</b><span>Stops for you to approve the items and to choose the vendor, then carries on.</span></button>
+            <button data-arrive="manual"><b>You work it yourself</b><span>The agent doesn't start. Opens the new requirement.</span></button></div></details>
           <button class="btn primary" data-runall="1" title="Takes every unfinished requirement as far as it can; stops where you're needed">Run agent on all</button></div></div>
         <div class="tbl ovt"><table><thead><tr><th>Requirement</th><th>Progress</th><th>Status</th><th>Agent</th></tr></thead><tbody>
         ${shown.map(x => {
@@ -801,11 +808,14 @@
       if (!el.dataset.wired) {
         el.dataset.wired = "1";
         el.addEventListener("click", e => {
+          const sm = el.querySelector(".simmenu[open]");
+          if (sm && !sm.contains(e.target)) sm.open = false;  // a click elsewhere closes the menu
           const b = e.target.closest("button[data-runall],button[data-arrive],button[data-runone]");
           if (b) {
             b.disabled = true;
-            const url = b.dataset.runone ? `/api/cases/${encodeURIComponent(b.dataset.runone)}/agent` : b.dataset.arrive ? "/api/cases/arrive" : "/api/cases/agent/run-all";
-            post(url, {}).then(() => window.mountOverview(el))
+            const mode = b.dataset.arrive;
+            const url = b.dataset.runone ? `/api/cases/${encodeURIComponent(b.dataset.runone)}/agent` : mode ? `/api/cases/arrive?mode=${encodeURIComponent(mode)}` : "/api/cases/agent/run-all";
+            post(url, {}).then(r => mode === "manual" ? window.openCase(r.uid) : window.mountOverview(el))
               .catch(err => { b.disabled = false; window.toast ? window.toast(err.message) : alert(err.message); });
             return;
           }

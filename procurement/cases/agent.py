@@ -34,6 +34,7 @@ from pydantic import BaseModel
 
 from .. import llm
 from ..itemcodes import master as M
+from . import arrivals as AR
 from . import flow as F
 from . import quotes as CQ
 from . import reply as R
@@ -130,6 +131,9 @@ def _item_codes(case: F.Case, demo: bool, run: Run, client: Any) -> str:
 
 
 def _approve(case: F.Case) -> str:
+    if "approve" in AR.checkpoints(case.uid):
+        n = case.counts["ready"] + case.counts["decided"]
+        raise _need(f"Every line has an item code ({n}). This run asks a person to approve the items: approve them in step 3, then run the agent again.", "s3")
     F.approve(case.uid, True)
     n = case.counts["ready"] + case.counts["decided"]
     skipped = f", {case.counts['skipped']} left out" if case.counts["skipped"] else ""
@@ -201,6 +205,9 @@ def _award(case: F.Case, demo: bool) -> str:
         if rec.get("margin_pct") is not None and rec["margin_pct"] < CLOSE_CALL_PCT:
             raise _need(f"{g['category']}: {rec['vendor']} is cheapest by only {rec['margin_pct']:.1f}%, a close call. "
                         "Weigh terms and past performance and choose in step 5.", "s6")
+        if "award" in AR.checkpoints(case.uid):
+            raise _need(f"{g['category']}: {rec['vendor']} is recommended ({rec['reason']}). This run asks a person to choose: "
+                        "confirm it (or pick another) in step 5, then run the agent again.", "s6")
         CQ.award(case.uid, g["category"], rec["vendor_id"])
         out.append(f"{g['category']}: {rec['vendor']} ({rec['reason']})")
     return "Chose the vendor: " + "; ".join(out)

@@ -1,4 +1,8 @@
-"""Demo: a new requirement email lands, and the agent takes it from there on its own.
+"""Demo: a new requirement email lands, and the agent takes it from there (or a person does).
+
+Three ways to run it (MODES): "auto" the agent runs it end to end; "manual" the agent doesn't start,
+a person works it; "checkpoints" the agent runs but stops for a person before approving the items and
+before choosing the vendor (agent.py reads the mode from the record), then carries on when run again.
 
 Each new email is one of the demo requirement emails (samples/demo_inbox.json) sent again for another
 site: the project and tower are swapped for the next name below, quantities are scaled, it gets the next
@@ -22,6 +26,8 @@ TEMPLATES = ["1003", "1010", "1008", "1006", "1009", "1004", "1011"]
 SITES = [("Hillcrest", "Tower-E"), ("Bayview", "Tower-2"), ("Oakridge", "Block-A"), ("Sunfield", "Tower-5"),
          ("Maple Court", "Tower-B"), ("Northgate", "Tower-3")]
 PROJECTS = ["Greenfield", "Lakeview", "Riverside"]
+MODES = ("auto", "manual", "checkpoints")
+CHECKPOINTS = ("approve", "award")  # where a "checkpoints" run stops for a person
 
 
 def store() -> Path:
@@ -40,8 +46,18 @@ def _scale(res: dict, k: float) -> None:
                 ln[f] = round(ln[f] * k, 2)
 
 
-def arrive() -> dict:
+def checkpoints(uid: str) -> tuple[str, ...]:
+    """Where the agent must stop for a person on this requirement (only emails that landed in "checkpoints" mode)."""
+    try:
+        return CHECKPOINTS if F.record(uid).get("demo_mode") == "checkpoints" else ()
+    except F.CaseError:
+        return ()
+
+
+def arrive(mode: str = "auto") -> dict:
     """A new requirement email lands. Returns its record (uid, subject, …)."""
+    if mode not in MODES:
+        raise F.CaseError(f"Unknown mode {mode}: one of {', '.join(MODES)}.")
     demo = {str(r["uid"]): r for r in json.loads(Path(F.DEMO_INBOX).read_text())} if Path(F.DEMO_INBOX).exists() else {}
     have = records()
     n = len(have)
@@ -60,10 +76,11 @@ def arrive() -> dict:
     _scale(res, 1 + 0.15 * ((n % 4) + 1))
     when = format_datetime(datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(microsecond=0))
     res["email"]["date"] = when
-    rec = {"uid": uid, "received": when, "result": res, "arrived": F.now(), "copied_from": str(tpl["uid"])}
+    rec = {"uid": uid, "received": when, "result": res, "arrived": F.now(), "copied_from": str(tpl["uid"]), "demo_mode": mode}
     store().mkdir(parents=True, exist_ok=True)
     (store() / f"{uid}.json").write_text(json.dumps(rec, indent=2))
     state = F.load_state(uid)
-    F.log_event(state, "email_in", f"New requirement email landed: {res['email'].get('subject')} (demo).", actor="system")
+    how = {"auto": "the agent runs it", "manual": "for a person to work", "checkpoints": "the agent runs it, stopping for a person to approve and to choose"}[mode]
+    F.log_event(state, "email_in", f"New requirement email landed: {res['email'].get('subject')} (demo: {how}).", actor="system")
     F.save_state(uid, state)
     return copy.deepcopy(rec)

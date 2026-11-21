@@ -137,12 +137,14 @@ def run_agent_all() -> dict:
 
 
 @router.post("/arrive")
-def new_email() -> dict:
-    """Demo: a new requirement email lands and the agent starts on it by itself."""
+def new_email(mode: Literal["auto", "manual", "checkpoints"] = "auto") -> dict:
+    """Demo: a new requirement email lands. auto: the agent runs it end to end; manual: the agent doesn't start;
+    checkpoints: the agent runs it but stops for a person before approving the items and before choosing the vendor."""
     m = _master()
-    rec = _do(AR.arrive)
-    A.start(rec["uid"], master=m)
-    return {"uid": rec["uid"], "subject": rec["result"]["email"].get("subject")}
+    rec = _do(AR.arrive, mode)
+    if mode != "manual":
+        A.start(rec["uid"], master=m)
+    return {"uid": rec["uid"], "subject": rec["result"]["email"].get("subject"), "mode": mode}
 
 
 @router.get("/{uid}")
