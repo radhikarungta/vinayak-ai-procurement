@@ -185,7 +185,7 @@ def test_sync_skips_blocked_mail_without_calling_the_model(store, monkeypatch):
     cfg = mailbox.MailConfig(address="t@gmail.com", password="x", watch_from=[])
     client = CountingModel()
     out = mailbox.sync(cfg, imap_factory=FakeImap, client=client)
-    assert out == {"fetched": 2, "read": 1, "failed": 0, "skipped": 1, "waiting_for_key": 0}
+    assert out == {"fetched": 2, "read": 1, "failed": 0, "skipped": 1, "site_replies": 0, "waiting_for_key": 0}
     assert client.calls == 1
 
     items = {i["uid"]: i for i in mailbox.list_inbox()}
@@ -204,7 +204,7 @@ def test_sync_holds_mail_no_allow_rule_matches_even_without_key(store, monkeypat
     monkeypatch.setattr(extract, "has_credentials", lambda: False)
     cfg = mailbox.MailConfig(address="t@gmail.com", password="x", watch_from=["riverside.site@example.com"])
     out = mailbox.sync(cfg, imap_factory=FakeImap)
-    assert out == {"fetched": 2, "read": 0, "failed": 0, "skipped": 1, "waiting_for_key": 1}
+    assert out == {"fetched": 2, "read": 0, "failed": 0, "skipped": 1, "site_replies": 0, "waiting_for_key": 1}
     items = {i["uid"]: i for i in mailbox.list_inbox()}
     assert items["42"]["decision"] == "hold" and items["42"]["reason"] == "Held: no allow rule matched."
     assert items["41"]["status"] == "needs_key" and items["41"]["rule_id"] == "env-1"
