@@ -52,6 +52,8 @@ input[type=file]{font-size:.85rem;max-width:100%}
 .btn:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8rem}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+body.fixed{overflow:hidden} body.fixed .pagehead{display:none} body.fixed .wrap{padding-bottom:0}
 .err{padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:.9rem}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 .checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
@@ -89,6 +91,7 @@ nav.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
 nav.tabs button{font:inherit;font-size:.9rem;font-weight:600;background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 nav.tabs button:focus-visible{outline:2px solid var(--accent)}
+nav.subtabs{border-top:1px solid var(--line)} nav.subtabs button{font-size:.82rem;font-weight:500;padding:7px 10px}
 .count{font:500 .72rem var(--mono);background:var(--sunk);padding:1px 6px;border-radius:999px;margin-left:4px}
 .kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -135,25 +138,27 @@ tr.row{cursor:pointer} tr.row:hover td{background:var(--accent-soft)} tr.row:foc
       <span class="chip" id="mode">Checking…</span>
     </div>
   </div>
-  <nav class="tabs bar" role="tablist">
-    <button role="tab" data-tab="dash" aria-selected="true">Dashboard</button>
-    <button role="tab" data-tab="reqs" aria-selected="false">Requirements</button>
+  <nav class="tabs bar" role="tablist" id="main-nav">
+    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="admin" aria-selected="false">Admin</button>
+  </nav>
+  <nav class="tabs bar subtabs" role="tablist" id="admin-nav" aria-label="Admin" hidden>
     <button role="tab" data-tab="emails" aria-selected="false">Emails <span class="count" id="n-emails"></span></button>
     <button role="tab" data-tab="itemcodes" aria-selected="false">Item codes</button>
-    <button role="tab" data-tab="shortlist" aria-selected="false">Vendor shortlist</button>
-    <button role="tab" data-tab="vendors" aria-selected="false">Vendors</button>
+    <button role="tab" data-tab="vendors" aria-selected="false">Vendor directory</button>
     <button role="tab" data-tab="rules" aria-selected="false">Email rules</button>
-    <button role="tab" data-tab="read" aria-selected="false" hidden>Read one email</button>
   </nav>
 </div>
 <div class="wrap">
   <div class="pagehead">
-    <div><h1 id="page-title">Dashboard</h1><p id="page-sub"></p></div>
+    <div><h1 id="page-title">Overview</h1><p id="page-sub"></p></div>
     <span class="small muted" id="asof"></span>
   </div>
 
   <section id="tab-dash"></section>
   <section id="tab-reqs" hidden></section>
+  <section id="tab-overview"></section>
+  <section id="tab-cases" hidden></section>
   <section id="tab-itemcodes" hidden></section>
   <section id="tab-shortlist" hidden></section>
   <section id="tab-vendors" hidden></section>
@@ -266,24 +271,39 @@ const short = d => (d || "").replace(/^\w+, /, "").slice(0, 11);
 const who = s => (s || "").replace(/<.*>/, "").trim();
 
 const PAGES = {
-  dash: ["Dashboard", "Every step from a site requirement to a vendor recommendation. The agent recommends; a person decides."],
-  reqs: ["Requirements", "Requirement emails read into what is needed, where, by when and who asked."],
+  dash: ["Overview", "Every step from a site requirement to a vendor recommendation. The agent recommends; a person decides."],
+  reqs: ["Requirement list", "Requirement emails read into what is needed, where, by when and who asked."],
   emails: ["Emails", "Each email next to the requirement read from it, with the line behind every field."],
+  overview: ["Overview", "Every requirement email and where it is: item codes, approval, vendors, RFQ. Click a row to work on it."],
+  cases: ["Requirements", "Pick an email and work down it: what was asked, the item code for each line (or a reply to the site), approve the items, pick vendors, send the RFQ. The agent drafts; a person decides."],
   itemcodes: ["Item codes", "Each requirement line matched to an ERP item code, or a new code suggested. Likely duplicates flagged."],
-  shortlist: ["Vendor shortlist", "Vendors ranked for each requirement on price, past performance, lead time and response time, with the reason. You pick who gets the RFQ."],
-  vendors: ["Vendors", "Every vendor we know, what they do, how to reach them and how past jobs went."],
+  shortlist: ["Vendor scoring", "Vendors ranked for each requirement on price, past performance, lead time and response time, with the reason. You pick who gets the RFQ."],
+  vendors: ["Vendor directory", "Every vendor we know, what they do, how to reach them and how past jobs went."],
   rules: ["Email rules", "Which emails get read and which are skipped, before any AI call."],
   read: ["Read one email", "Upload or paste a site email to read it."],
 };
-function showTab(t) {
-  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
-  for (const k of ["dash", "reqs", "emails", "itemcodes", "shortlist", "vendors", "rules", "read"]) $("#tab-" + k).hidden = k !== t;
+const ADMIN = ["emails", "itemcodes", "vendors", "rules", "reqs", "shortlist", "read"];
+let lastAdmin = "emails";
+function showTab(t, arg) {
+  if (t === "admin") t = lastAdmin;
+  document.body.classList.toggle("fixed", t === "cases");
+  const inAdmin = ADMIN.includes(t);
+  if (inAdmin) lastAdmin = t;
+  document.querySelectorAll("#main-nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t || (b.dataset.tab === "admin" && inAdmin) || (b.dataset.tab === "overview" && t === "cases")));
+  document.querySelectorAll("#admin-nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  $("#admin-nav").hidden = !inAdmin;
+  const want = t === "cases" && arg ? "cases/" + arg : t;
+  if (location.hash.slice(1) !== want) history.replaceState(null, "", "#" + want);
+  window.scrollTo(0, 0);
+  for (const k of ["overview", "dash", "reqs", "emails", "cases", "itemcodes", "shortlist", "vendors", "rules", "read"]) $("#tab-" + k).hidden = k !== t;
   const [title, sub] = PAGES[t] || ["", ""];
   $("#page-title").textContent = title; $("#page-sub").textContent = sub;
-  if (FEATURES[t]) mountFeature(t);
+  if (t === "overview" && mounted.overview && window.mountOverview) window.mountOverview($("#tab-overview"));
+  else if (t === "cases") { if (window.mountCases) window.mountCases($("#tab-cases"), arg); else { window.PENDING_CASE = arg; mountFeature(t); } }
+  else if (FEATURES[t]) mountFeature(t);
   if (t === "dash") drawDashboard();
 }
-document.querySelector("nav.tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+document.querySelectorAll("nav.tabs").forEach(n => n.addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); }));
 
 function openEmail(uid) {
   showTab("emails");
@@ -360,6 +380,8 @@ $("#form").addEventListener("submit", e => {
 // To add a step: give it a summary endpoint returning {title, headline, stats:[{label,value,tone}], ready}
 // and set `summary` (and `tab`, if it has a page) below. Cards without data show as "not built yet".
 const FEATURES = {
+  overview: {script: "/web/cases.js", mount: "mountOverview"},
+  cases: {script: "/web/cases.js", mount: "mountCases"},
   itemcodes: {script: "/web/itemcodes.js", mount: "mountItemCodes"},
   shortlist: {script: "/web/shortlist.js", mount: "mountShortlist"},
   vendors: {script: "/web/vendors.js", mount: "mountVendors"},
@@ -378,6 +400,7 @@ const PIPELINE = [
   {n: 6, title: "Recommend to HOD", what: "A note with its reasoning. The HOD decides."},
 ];
 const SUPPORT = [
+  {title: "Requirement workflow", what: "Each requirement email through item codes, approval, vendor picks and the RFQ.", tab: "cases", summary: "/api/cases/summary"},
   {title: "Vendor directory", what: "Every vendor, their categories, contacts and past performance.", tab: "vendors", summary: "/api/vendors/summary"},
   {title: "Email rules", what: "Which emails get read, and which are skipped before any AI call.", tab: "rules", summary: "/api/email-rules/summary"},
 ];
@@ -415,7 +438,7 @@ function mountFeature(t) {
   if (mounted[t]) return; mounted[t] = true;
   const f = FEATURES[t], el = $("#tab-" + t);
   el.innerHTML = `<div class="empty">Loading…</div>`;
-  const go = () => window[f.mount] ? window[f.mount](el) : (el.innerHTML = `<div class="empty">This page isn't built yet.</div>`);
+  const go = () => window[f.mount] ? window[f.mount](el, t === "cases" ? window.PENDING_CASE : undefined) : (el.innerHTML = `<div class="empty">This page isn't built yet.</div>`);
   if (window[f.mount]) return go();
   const sc = document.createElement("script"); sc.src = f.script; sc.onload = go;
   sc.onerror = () => { mounted[t] = false; el.innerHTML = `<div class="empty">This page isn't built yet.</div>`; };
@@ -475,11 +498,19 @@ function render(r, el = $("#out")) {
       </tbody></table></div>` : `<div class="err">No quantity sheet could be read from the attachments.</div>`}
   `;
 }
-$("#page-sub").textContent = PAGES.dash[1];
+$("#page-sub").textContent = PAGES.overview[1];
 $("#asof").textContent = "As of " + new Date().toLocaleDateString("en-IN", {day: "numeric", month: "short", year: "numeric"});
 // Shareable links: /#sample, /#emails, /#vendors …
 if (location.hash === "#sample") { showTab("read"); run(fetch("/api/samples/riverside")); }
-else if (location.hash.length > 1 && document.querySelector(`#tab-${CSS.escape(location.hash.slice(1))}`)) showTab(location.hash.slice(1));
+else route();
+// #cases/<uid> opens one requirement; Back returns to the overview.
+function route() {
+  const h = location.hash.slice(1);
+  if (h.startsWith("cases/")) showTab("cases", decodeURIComponent(h.slice(6)));
+  else if (h === "admin" || (h && h !== "cases" && document.querySelector(`#tab-${CSS.escape(h)}`))) showTab(h);
+  else showTab("overview");
+}
+window.addEventListener("hashchange", route);
 </script>
 </body>
 </html>
