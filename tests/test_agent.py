@@ -89,7 +89,7 @@ def test_close_call_stops_for_a_person(three, monkeypatch):
 def test_live_requirement_stops_before_any_email(three, monkeypatch):
     monkeypatch.setattr(A, "is_demo", lambda uid: False)
     r = A.run("2")
-    assert r.mode == "live" and r.stopped == "needs_you" and r.step == "s5" and "doesn't send real emails" in r.reason
+    assert r.mode == "live" and r.stopped == "needs_you" and r.step == "s4" and "doesn't send real emails" in r.reason
     assert not F.build_case("2").rfqs
     monkeypatch.setattr(A, "is_demo", lambda uid: False)
     r = A.run("1")
