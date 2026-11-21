@@ -1,0 +1,30 @@
+{
+  "_note": "Hand-written reference extraction for the sample email. Used by tests and by replay mode when no API key is set. Not a recorded model output.",
+  "project": {"value": "Vinayak Riverside", "quote": "Vinayak Riverside"},
+  "block": {"value": "Tower 2", "quote": "waterproofing quantities for Tower 2"},
+  "work_type": {"value": "Internal waterproofing", "quote": "internal waterproofing work"},
+  "contract_type": {"value": "Work order (labour and chemicals)", "quote": "Please issue the Work Order (WO)"},
+  "scope_areas": {
+    "values": ["Toilets and W.C.", "Kitchen", "Wash area", "Balcony", "Open terrace", "F.R.P. (fire refuge platform)"],
+    "quote": "including all toilets/W.C., kitchen, wash area, balcony, open terrace, and F.R.P."
+  },
+  "floors": {"value": "Ground floor, 1st floor, and 3rd floor through the typical floors", "quote": "covering the ground floor, 1st floor, and 3rd floor through typical floors"},
+  "start": {"value": "November 2026", "quote": "scheduled to begin in November 2026"},
+  "finish": {"value": "June 2028", "quote": "completed by June 2028"},
+  "requested_by": {"value": "QS & Billing, Riverside site", "quote": "QS & Billing Engineer Vinayak Riverside"},
+  "requested_action": {"value": "Issue the work order to the named vendor", "quote": "Please issue the Work Order (WO) so we can proceed with the work on site."},
+  "vendor_named": {"value": "Nirmal", "quote": "the MD advised engaging Nirmal for the internal waterproofing work"},
+  "vendor_named_basis": {"value": "MD's advice in the meeting of 3 Nov 2026", "quote": "As discussed in our meeting on November 3, 2026, the MD advised engaging Nirmal"},
+  "attachments_referenced": {"values": ["Waterproofing quantity sheet, by floor and flat"], "quote": "Please find attached the waterproofing quantities for Tower 2, broken down by floor and flat."},
+  "exclusions": {"values": ["Mock-up floor, already given to Nirmal"], "quote": "for the mock-up floor, the waterproofing work shall be carried out by Nirmal as approved."},
+  "thread": [
+    {"who": "Site QS & Billing", "position": "Asks for a work order to be issued to Nirmal, as the MD advised.", "quote": "Please issue the Work Order (WO) so we can proceed with the work on site."},
+    {"who": "Contracts & Planning", "position": "The contractor will be chosen by tender and comparative, then management approval. Only the mock-up floor goes to Nirmal.", "quote": "shall be finalised after proper evaluation and comparative analysis of the received tenders"},
+    {"who": "Site QS & Billing", "position": "Sends the quantity sheet that Contracts asked for.", "quote": "As you requested, the quantities are attached herewith."}
+  ],
+  "open_questions": [
+    "Which floor is the mock-up floor, so its area can be taken out of the tender quantities?",
+    "The email says 'open terrace' but not whether roof waterproofing is included. Confirm the scope.",
+    "Are labour hutment, water and power available at site for the contractor?"
+  ]
+}
