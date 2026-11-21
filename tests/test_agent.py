@@ -262,3 +262,16 @@ def test_a_suggestion_that_doesnt_fit_its_question_is_left_for_a_person(three, m
     monkeypatch.setattr(SR, "simulated_answer", odd)
     r = A.run("1")
     assert r.stopped == "needs_you" and r.step == "s2" and "still need" in r.reason
+
+
+def test_inline_mode_steps_on_each_check(three, monkeypatch):
+    """Serverless: no thread; each check (tick) takes one step until the run stops."""
+    monkeypatch.setenv("AGENT_INLINE", "1")
+    assert A.start("2") is True and A.start("2") is False  # one run at a time
+    assert T.last_run(F.build_case("2"))["running"]
+    for _ in range(30):
+        A.tick("2")
+        if not T.last_run(F.build_case("2"))["running"]:
+            break
+    r = T.last_run(F.build_case("2"))
+    assert r["stopped"] == "ready_for_hod" and len(r["steps"]) == 5 and not A.RUNNING

@@ -75,6 +75,10 @@ def list_cases() -> dict:
     except M.MasterMissing as e:
         return {"ready": False, "message": str(e), "items": []}
     items = []
+    if A.inline():  # serverless: move running agents on (one step each) as the overview checks
+        for r in F.records():
+            if (F.load_state(str(r["uid"])).get("agent_live") or {}).get("running"):
+                A.tick(str(r["uid"]), master=m)
     for r in F.records():
         try:
             c = F.build_case(str(r["uid"]), master=m, rec=r)
@@ -150,6 +154,7 @@ def new_email(mode: Literal["auto", "manual", "checkpoints"] = "auto") -> dict:
 @router.get("/{uid}")
 def get_case(uid: str) -> dict:
     m = _master()
+    A.tick(uid, master=m)  # serverless: the agent's next step happens as the page checks on it
     return _full(_case(uid, m), m)
 
 

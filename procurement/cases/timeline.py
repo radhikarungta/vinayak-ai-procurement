@@ -85,6 +85,11 @@ def last_run(case: F.Case) -> dict | None:
     if live:
         if case.uid in A.RUNNING:
             return live
+        if A.inline():  # serverless: the run lives in the saved state; stale only if no step for 10 minutes
+            import time  # noqa: PLC0415
+
+            if time.time() - float(state.get("agent_next") or 0) < 600:
+                return live
         return live | {"running": False, "stopped": "error", "reason": "The run was cut off (the server restarted). Run it again."}
     runs = state.get("agent_runs") or []
     return runs[-1] if runs else None

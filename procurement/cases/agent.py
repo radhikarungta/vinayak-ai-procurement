@@ -245,9 +245,18 @@ def _live(uid: str, r: Run) -> None:
     F.save_state(uid, state)
 
 
+def inline() -> bool:
+    """Serverless (Vercel): no background threads. The agent takes one step each time the page checks
+    on it (tick), its progress kept in the saved state. AGENT_INLINE=1 forces it; on Vercel it's on."""
+    v = os.environ.get("AGENT_INLINE")
+    return v == "1" if v is not None else bool(os.environ.get("VERCEL"))
+
+
 def start(uid: str, *, master: M.Master | None = None) -> bool:
     """Run the agent in the background (one run per case at a time). False if one is already running."""
     F.build_case(uid, master=master)  # a bad id fails now, in the request
+    if inline():
+        return _begin_inline(uid)
     with _LOCK:
         if uid in RUNNING:
             return False
@@ -259,6 +268,8 @@ def start(uid: str, *, master: M.Master | None = None) -> bool:
 
 def start_many(uids: list[str]) -> list[str]:
     """One after another in one background thread (the overview shows them move in turn)."""
+    if inline():
+        return [u for u in uids if _begin_inline(u)]
     with _LOCK:
         todo = [u for u in uids if u not in RUNNING]
         RUNNING.update(todo)
@@ -307,43 +318,101 @@ def run(uid: str, *, client: Any = None, max_moves: int = 25, master: M.Master |
                 RUNNING.discard(uid)
 
 
-def _run(uid: str, r: Run, demo: bool, delay: float, client: Any, max_moves: int, master: M.Master | None) -> Run:
+def _begin(uid: str, r: Run, demo: bool) -> None:
     with F.acting_as("agent"), F.STATE_LOCK:
         state = F.load_state(uid)
         F.log_event(state, "agent", f"Agent started ({'demo: sends, site answers and quotes simulated' if demo else 'live: stops before any email goes out'}).")
+        state.pop("agent_key", None)
         F.save_state(uid, state)
         _live(uid, r)
-    last = None
-    try:
-        for _ in range(max_moves):
-            if delay:
-                time.sleep(delay)  # outside the lock: a person's clicks go through between steps
-            with F.acting_as("agent"), F.STATE_LOCK:
-                case = F.build_case(uid, master=master)
-                key = (case.stage, tuple(sorted(case.counts.items())), len(case.replies), len(case.site_replies), len(case.rfqs), case.quotes_in)
-                if key == last:
-                    raise _need(f"The agent made no progress at stage {case.stage}.", "s2")
-                last = key
-                text = _move(case, demo, r, client)
-                r.steps.append(Step(at=F.now(), stage=case.stage, text=text))
-                _live(uid, r)
-        else:
-            raise _need("The agent stopped after too many steps.", None)
-    except _Stop as s:
-        r.stopped, r.reason, r.step = s.kind, s.reason, s.step
-    except (F.CaseError, R.SendError, llm.LLMError) as e:
+
+
+def _step(uid: str, r: Run, demo: bool, client: Any, master: M.Master | None, last: Any) -> Any:
+    """One move. Returns the progress key; raises _Stop (or an error) when the run ends."""
+    with F.acting_as("agent"), F.STATE_LOCK:
+        case = F.build_case(uid, master=master)
+        key = [case.stage, sorted(case.counts.items()), len(case.replies), len(case.site_replies), len(case.rfqs), case.quotes_in]
+        key = __import__("json").loads(__import__("json").dumps(key))  # the same shape saved or not
+        if key == last:
+            raise _need(f"The agent made no progress at stage {case.stage}.", "s2")
+        text = _move(case, demo, r, client)
+        r.steps.append(Step(at=F.now(), stage=case.stage, text=text))
+        _live(uid, r)
+        return key
+
+
+def _end(uid: str, r: Run, e: BaseException) -> Run:
+    if isinstance(e, _Stop):
+        r.stopped, r.reason, r.step = e.kind, e.reason, e.step
+    elif isinstance(e, (F.CaseError, R.SendError, llm.LLMError)):
         r.stopped, r.reason = "error", str(e)
-    except Exception as e:  # noqa: BLE001 - recorded on the run, never left half-done
+    else:
         import logging
 
-        logging.getLogger(__name__).exception("Agent run on %s failed", uid)
+        logging.getLogger(__name__).error("Agent run on %s failed", uid, exc_info=e)
         r.stopped, r.reason = "error", f"Something went wrong ({type(e).__name__}): {e}"
     with F.acting_as("agent"), F.STATE_LOCK:
         r.finished_at, r.running = F.now(), False
         state = F.load_state(uid)
         state.pop("agent_live", None)
+        state.pop("agent_key", None)
+        state.pop("agent_next", None)
         label = {"needs_you": "Agent stopped: needs you", "ready_for_hod": "Agent finished", "done": "Agent finished", "error": "Agent stopped on an error"}
         F.log_event(state, "agent", f"{label[r.stopped]}. {r.reason}", steps=len(r.steps))
         state["agent_runs"] = (state.get("agent_runs") or [])[-19:] + [r.model_dump()]
         F.save_state(uid, state)
     return r
+
+
+def _run(uid: str, r: Run, demo: bool, delay: float, client: Any, max_moves: int, master: M.Master | None) -> Run:
+    _begin(uid, r, demo)
+    last = None
+    try:
+        for _ in range(max_moves):
+            if delay:
+                time.sleep(delay)  # outside the lock: a person's clicks go through between steps
+            last = _step(uid, r, demo, client, master, last)
+        raise _need("The agent stopped after too many steps.", None)
+    except Exception as e:  # noqa: BLE001 - recorded on the run, never left half-done
+        return _end(uid, r, e)
+
+
+# ── Serverless: one step per check ─────────────────────────────────────────────────────────────
+
+
+def _begin_inline(uid: str) -> bool:
+    state = F.load_state(uid)
+    if (state.get("agent_live") or {}).get("running"):
+        return False
+    r = Run(at=F.now(), mode="demo" if is_demo(uid) else "live", running=True)
+    _begin(uid, r, is_demo(uid))
+    with F.STATE_LOCK:
+        state = F.load_state(uid)
+        state["agent_next"] = time.time() + step_delay()
+        F.save_state(uid, state)
+    return True
+
+
+def tick(uid: str, *, client: Any = None, master: M.Master | None = None) -> None:
+    """Inline mode: if this requirement's agent is due a step, take it. Called when the page checks."""
+    if not inline():
+        return
+    state = F.load_state(uid)
+    live = state.get("agent_live") or {}
+    if not live.get("running") or time.time() < float(state.get("agent_next") or 0):
+        return
+    with F.STATE_LOCK:  # claim the step (another check arriving now waits for the next one)
+        state = F.load_state(uid)
+        state["agent_next"] = time.time() + 120  # a lease while this step runs
+        F.save_state(uid, state)
+    r = Run(**live)
+    try:
+        if len(r.steps) >= 25:
+            raise _need("The agent stopped after too many steps.", None)
+        key = _step(uid, r, is_demo(uid), client, master, state.get("agent_key"))
+        with F.STATE_LOCK:
+            state = F.load_state(uid)
+            state["agent_key"], state["agent_next"] = key, time.time() + step_delay()
+            F.save_state(uid, state)
+    except Exception as e:  # noqa: BLE001 - the run ends here, recorded
+        _end(uid, r, e)

@@ -7,3 +7,5 @@ __pycache__/
 # Real hackathon data stays out of this public repo
 data/
 *.real.*
+.vercel
+.env*

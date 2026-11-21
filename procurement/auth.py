@@ -71,8 +71,13 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 <style>
 :root{--bg:#f3f5f6;--surface:#fff;--line:#d3dbdf;--fg:#17232b;--muted:#5a6a74;--accent:#0d6672;--on-accent:#fff;--bad:#b3261e;--bad-soft:#f9dedc}
 :root[data-theme=dark]{--bg:#0f171c;--surface:#16222a;--line:#2c3d47;--fg:#e3eaee;--muted:#93a5af;--accent:#4fb8c4;--on-accent:#0b1a1e;--bad:#f28b82;--bad-soft:#3d1c1a}
-*{box-sizing:border-box} body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
-form{width:min(360px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;color:var(--fg);font:15px/1.5 system-ui,sans-serif;
+  background:linear-gradient(rgba(10,20,30,.25),rgba(10,20,30,.45)),url(/web/login-bg.jpg) center/cover no-repeat fixed,var(--bg)}
+form{width:min(380px,calc(100vw - 32px));background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.55);border-radius:16px;padding:28px;
+  display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+:root[data-theme=dark] form{background:rgba(22,34,42,.62);border-color:rgba(255,255,255,.12)}
+input{background:rgba(255,255,255,.75)} :root[data-theme=dark] input{background:rgba(22,34,42,.7)}
 .brand{display:flex;gap:10px;align-items:center;margin-bottom:6px} .mark{width:34px;height:34px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:800}
 .brand b{display:block} .brand span{font-size:.8rem;color:var(--muted)}
 label{font-size:.85rem;font-weight:500;display:flex;flex-direction:column;gap:4px}
@@ -81,7 +86,7 @@ button{font:inherit;font-weight:600;cursor:pointer;padding:9px 14px;border-radiu
 .err{padding:8px 10px;border-radius:6px;background:var(--bad-soft);color:var(--bad);font-size:.88rem}
 </style></head><body>
 <form method="post" action="/login">
-  <div class="brand"><span class="mark">V</span><div><b>Vinayak Procurement</b><span>Admin sign in</span></div></div>
+  <div class="brand"><span class="mark">V</span><div><b>Vinayak Procurement</b><span>Site requirement to vendor comparative</span></div></div>
   {error}
   <label>Username <input name="username" autocomplete="username" required autofocus></label>
   <label>Password <input name="password" type="password" autocomplete="current-password" required></label>

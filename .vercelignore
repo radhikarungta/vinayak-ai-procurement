@@ -1,0 +1,13 @@
+# Never upload: secrets, real client data, local tooling.
+.env
+.env.*
+!.env.example
+data/
+.venv/
+.claude/
+tests/
+scripts/
+**/__pycache__/
+*.bundle
+.pytest_cache/
+.ruff_cache/

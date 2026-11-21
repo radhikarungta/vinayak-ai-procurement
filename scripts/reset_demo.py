@@ -35,6 +35,7 @@ load_dotenv()
 
 from procurement.cases import agent as A  # noqa: E402
 from procurement.cases import arrivals as AR  # noqa: E402
+from procurement.cases import db as D  # noqa: E402
 from procurement.cases import flow as F  # noqa: E402
 from procurement.cases import quotes as CQ  # noqa: E402
 
@@ -63,6 +64,9 @@ def main() -> None:
     for p in d.glob("*.json"):
         p.unlink()
     shutil.rmtree(AR.store(), ignore_errors=True)
+    if D.enabled():  # the hosted app's data (SUPABASE_URL / SUPABASE_SERVICE_KEY set)
+        D.delete_all("case_state")
+        D.delete_all("arrivals")
 
     plan = [("1009", "approve", "person"), ("1010", "vendors", "person"), ("1011", "rfq", "person"),
             ("1008", "quotes", "person"), ("1003", "waiting_on_site", "person")]

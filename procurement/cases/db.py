@@ -33,20 +33,36 @@ def _client() -> httpx.Client:
     )
 
 
-def load(uid: str) -> dict | None:
-    """The saved state, or None if this requirement has none yet."""
+def load(uid: str, table: str = TABLE, col: str = "state") -> dict | None:
+    """The saved row's JSON (the state, by default), or None if there is none yet."""
     with _client() as c:
-        r = c.get(f"/{TABLE}", params={"uid": f"eq.{uid}", "select": "state"})
+        r = c.get(f"/{table}", params={"uid": f"eq.{uid}", "select": col})
     if r.status_code != 200:
         raise DBError(f"Supabase read failed ({r.status_code}): {r.text[:200]}")
     rows = r.json()
-    return rows[0]["state"] if rows else None
+    return rows[0][col] if rows else None
 
 
-def save(uid: str, state: dict) -> None:
-    """Insert or replace the whole state (one row per requirement)."""
+def save(uid: str, state: dict, table: str = TABLE, col: str = "state") -> None:
+    """Insert or replace the row's JSON (one row per requirement)."""
     with _client() as c:
-        r = c.post(f"/{TABLE}", params={"on_conflict": "uid"}, json={"uid": uid, "state": state},
+        r = c.post(f"/{table}", params={"on_conflict": "uid"}, json={"uid": uid, col: state},
                    headers={"Prefer": "resolution=merge-duplicates,return=minimal"})
     if r.status_code not in (200, 201, 204):
         raise DBError(f"Supabase write failed ({r.status_code}): {r.text[:200]}")
+
+
+def all_rows(table: str, col: str) -> list[dict]:
+    """Every row's JSON in a table, oldest first (the simulated emails)."""
+    with _client() as c:
+        r = c.get(f"/{table}", params={"select": col, "order": "uid"})
+    if r.status_code != 200:
+        raise DBError(f"Supabase read failed ({r.status_code}): {r.text[:200]}")
+    return [row[col] for row in r.json()]
+
+
+def delete_all(table: str) -> None:
+    with _client() as c:
+        r = c.delete(f"/{table}", params={"uid": "neq."})
+    if r.status_code not in (200, 204):
+        raise DBError(f"Supabase delete failed ({r.status_code}): {r.text[:200]}")

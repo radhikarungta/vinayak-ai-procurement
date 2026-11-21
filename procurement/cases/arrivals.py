@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
 
+from . import db as D
 from . import flow as F
 
 # Which demo emails are sent again, in turn (each needs a different path through the flow).
@@ -35,6 +36,8 @@ def store() -> Path:
 
 
 def records() -> list[dict]:
+    if D.enabled():  # Supabase: every server instance sees the same emails
+        return D.all_rows("arrivals", "rec")
     d = store()
     return [json.loads(p.read_text()) for p in sorted(d.glob("*.json"))] if d.exists() else []
 
@@ -77,8 +80,11 @@ def arrive(mode: str = "auto") -> dict:
     when = format_datetime(datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(microsecond=0))
     res["email"]["date"] = when
     rec = {"uid": uid, "received": when, "result": res, "arrived": F.now(), "copied_from": str(tpl["uid"]), "demo_mode": mode}
-    store().mkdir(parents=True, exist_ok=True)
-    (store() / f"{uid}.json").write_text(json.dumps(rec, indent=2))
+    if D.enabled():
+        D.save(uid, rec, table="arrivals", col="rec")
+    else:
+        store().mkdir(parents=True, exist_ok=True)
+        (store() / f"{uid}.json").write_text(json.dumps(rec, indent=2))
     state = F.load_state(uid)
     how = {"auto": "the agent runs it", "manual": "for a person to work", "checkpoints": "the agent runs it, stopping for a person to approve and to choose"}[mode]
     F.log_event(state, "email_in", f"New requirement email landed: {res['email'].get('subject')} (demo: {how}).", actor="system")
