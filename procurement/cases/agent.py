@@ -163,7 +163,7 @@ def _vendors(case: F.Case) -> str:
 def _rfqs(case: F.Case, demo: bool) -> str:
     todo = [d for d in Q.drafts(case) if not d.sent]
     if not demo:
-        raise _need(f"{len(todo)} RFQ{'s' * (len(todo) != 1)} drafted in step 5. The agent doesn't send real emails yet.", "s5")
+        raise _need(f"{len(todo)} RFQ{'s' * (len(todo) != 1)} drafted in step 4. The agent doesn't send real emails yet.", "s4")
     for d in todo:
         # A demo vendor with no email on file: a readable placeholder (".invalid" can never deliver).
         to = d.to or f"{re.sub(r'[^a-z0-9]+', '-', d.vendor.lower()).strip('-')[:40] or d.vendor_id}@no-email-on-file.invalid"
@@ -177,7 +177,7 @@ def _quotes_in(case: F.Case, demo: bool) -> str:
     if not waiting:
         raise _need("No quote to compare yet.", "s6")
     if not demo:
-        raise _need(f"Waiting for {len(waiting)} quote{'s' * (len(waiting) != 1)}: upload them in step 6 as they come in.", "s6")
+        raise _need(f"Waiting for {len(waiting)} quote{'s' * (len(waiting) != 1)}: upload them in step 5 as they come in.", "s6")
     for cat, w in waiting:
         CQ.simulate_quote(case.uid, w["vendor_id"], cat)
     return f"{len(waiting)} vendor{'s' * (len(waiting) != 1)} quoted (simulated for the demo)."
@@ -190,17 +190,17 @@ def _award(case: F.Case, demo: bool) -> str:
         if g["award"]:
             continue
         if g["waiting"] and not demo:
-            raise _need(f"{len(g['waiting'])} {g['category']} quote(s) still to come: wait, or choose on the quotes in (step 6).", "s6")
+            raise _need(f"{len(g['waiting'])} {g['category']} quote(s) still to come: wait, or choose on the quotes in (step 5).", "s6")
         if g["waiting"]:
             return _quotes_in(case, demo)
         rec = g["recommended"]
         if rec is None:
-            raise _need(f"No complete quote to recommend for {g['category']}: check the quotes in step 6.", "s6")
+            raise _need(f"No complete quote to recommend for {g['category']}: check the quotes in step 5.", "s6")
         if not rec["like_for_like"]:
-            raise _need(f"{g['category']}: the quotes aren't on the same quantities, so the cheapest isn't clear. Choose in step 6.", "s6")
+            raise _need(f"{g['category']}: the quotes aren't on the same quantities, so the cheapest isn't clear. Choose in step 5.", "s6")
         if rec.get("margin_pct") is not None and rec["margin_pct"] < CLOSE_CALL_PCT:
             raise _need(f"{g['category']}: {rec['vendor']} is cheapest by only {rec['margin_pct']:.1f}%, a close call. "
-                        "Weigh terms and past performance and choose in step 6.", "s6")
+                        "Weigh terms and past performance and choose in step 5.", "s6")
         CQ.award(case.uid, g["category"], rec["vendor_id"])
         out.append(f"{g['category']}: {rec['vendor']} ({rec['reason']})")
     return "Chose the vendor: " + "; ".join(out)
@@ -223,7 +223,7 @@ def _move(case: F.Case, demo: bool, run: Run, client: Any) -> str:
     if st == "hod":
         if case.hod:
             raise _Stop("ready_for_hod", "The email to the HOD has gone; waiting for the HOD's approval.", "s7")
-        raise _Stop("ready_for_hod", "Everything is sorted. The email to the HOD is drafted: review it and send it in step 7.", "s7")
+        raise _Stop("ready_for_hod", "Everything is sorted. The email to the HOD is drafted: review it and send it in step 6.", "s7")
     if st == "done":
         raise _Stop("done", "The HOD approved. Nothing left to do.", "s7")
     raise _need(f"Unknown stage {st}.", "s2")

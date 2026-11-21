@@ -340,7 +340,7 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
         left = len({(c, v) for c, ids in picks.items() for v in ids} - {(r.category, r.vendor_id) for r in rfqs})
         headline = f"{len(picked)} vendor{'s' * (len(picked) != 1)} picked. {left} RFQ{'s' * (left != 1)} still to send."
     elif stage == "rfq_sent":
-        headline = f"RFQs sent to all {len(picked)} picked vendor{'s' * (len(picked) != 1)}. Waiting for quotes: upload them in step 6."
+        headline = f"RFQs sent to all {len(picked)} picked vendor{'s' * (len(picked) != 1)}. Waiting for quotes: upload them in step 5."
     elif stage == "quotes":
         headline = f"{quotes_in} quote{'s' * (quotes_in != 1)} in from {len(picked)} picked vendor{'s' * (len(picked) != 1)}. Compare them and choose the vendor."
     elif stage in ("hod", "done"):

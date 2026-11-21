@@ -60,6 +60,10 @@ input[type=file]{font-size:.85rem;max-width:100%}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8rem}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 .acts{display:flex;gap:8px;flex-wrap:wrap}
+body:not(.inadmin) .devonly{display:none}
+.toasts{position:fixed;right:18px;bottom:84px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(420px,calc(100vw - 36px))}
+.toast{background:var(--bad-soft);color:var(--fg);border:1px solid var(--bad);border-radius:8px;padding:10px 14px;font-size:.88rem;box-shadow:0 6px 20px rgba(0,0,0,.15);display:flex;gap:10px;align-items:start}
+.toast.ok{background:var(--good-soft);border-color:var(--good)} .toast button{all:unset;cursor:pointer;color:var(--muted);margin-left:auto}
 body.fixed{overflow:hidden} body.fixed .pagehead{display:none} body.fixed .wrap{padding-bottom:0}
 .err{padding:10px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:.9rem}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
@@ -141,10 +145,10 @@ tr.row{cursor:pointer} tr.row:hover td{background:var(--accent-soft)} tr.row:foc
       <div><b>Vinayak Procurement</b><span>Site requirement to vendor comparative</span></div>
     </div>
     <div class="status">
-      <span class="chip warn" title="The Gmail connection is built (procurement/mailbox.py) but not switched on yet. It needs a dedicated intake mailbox, an app password and an OpenAI API key. Until then the app shows anonymised sample emails run through the real pipeline from hand-written extractions.">Demo data</span>
-      <span class="chip" id="mode">Checking…</span>
+      <span class="chip warn devonly" title="The Gmail connection is built (procurement/mailbox.py) but not switched on yet. It needs a dedicated intake mailbox, an app password and an OpenAI API key. Until then the app shows anonymised sample emails run through the real pipeline from hand-written extractions.">Demo data</span>
+      <span class="chip devonly" id="mode">Checking…</span>
       <button type="button" class="chip theme-toggle" id="theme-toggle" aria-label="Switch light or dark mode"></button>
-      <a class="chip" href="/demo" title="Hand-typed walkthrough of steps 4–6 (quotes, comparative statement, HOD note)">Steps 4–6 demo ↗</a>
+      <a class="chip devonly" href="/demo" title="Hand-typed walkthrough of steps 4–6 (quotes, comparative statement, HOD note)">Steps 4–6 demo ↗</a>
     </div>
   </div>
   <nav class="tabs bar" role="tablist" id="main-nav">
@@ -209,14 +213,25 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const num = (n, d = 2) => n == null ? "—" : n.toLocaleString("en-IN", {minimumFractionDigits: d, maximumFractionDigits: d});
 let live = false;
+// A short message in the corner (errors stay until closed; ok messages fade). Used by every page.
+window.toast = function (msg, kind) {
+  let box = document.querySelector(".toasts");
+  if (!box) { box = document.createElement("div"); box.className = "toasts"; box.setAttribute("role", "status"); document.body.appendChild(box); }
+  const t = document.createElement("div");
+  t.className = "toast " + (kind || "");
+  t.innerHTML = `<span>${esc(msg)}</span><button aria-label="Close">✕</button>`;
+  t.querySelector("button").onclick = () => t.remove();
+  box.appendChild(t);
+  if (kind === "ok") setTimeout(() => t.remove(), 3500);
+};
 
 fetch("/api/status").then(r => r.json()).then(s => {
   live = s.live;
-  $("#mode").className = "chip " + (live ? "good" : "warn");
+  $("#mode").className = "chip " + (live ? "good devonly" : "warn");  // a problem shows everywhere; "live" only in Admin
   $("#mode").textContent = s.label || (live ? `Live · ${s.model}` : "Replay mode · no OPENAI_API_KEY");
   $("#hint").textContent = live ? "" : "No API key is set, so only the sample runs, using a saved reference extraction. Set OPENAI_API_KEY in .env and restart to read your own emails.";
   $("#go").disabled = !live;
-}).catch(() => { $("#mode").textContent = "Server not reachable"; });
+}).catch(() => { $("#mode").textContent = "Server not reachable"; $("#mode").className = "chip bad"; });
 
 async function run(req) {
   const out = $("#out");
@@ -286,7 +301,7 @@ const PAGES = {
   dash: ["Overview", "Every step from a site requirement to a vendor recommendation. The agent recommends; a person decides."],
   reqs: ["Requirement list", "Requirement emails read into what is needed, where, by when and who asked."],
   emails: ["Emails", "Each email next to the requirement read from it, with the line behind every field."],
-  overview: ["Overview", "Every requirement email and where it is: item codes, approval, vendors, RFQ. Click a row to work on it."],
+  overview: ["Overview", ""],
   cases: ["Requirements", "Pick an email and work down it: what was asked, the item code for each line (or a reply to the site), approve the items, pick vendors, send the RFQ. The agent drafts; a person decides."],
   itemcodes: ["Item codes", "Each requirement line matched to an ERP item code, or a new code suggested. Likely duplicates flagged."],
   shortlist: ["Vendor scoring", "Vendors ranked for each requirement on price, past performance, lead time and response time, with the reason. You pick who gets the RFQ."],
@@ -300,6 +315,7 @@ function showTab(t, arg) {
   if (t === "admin") t = lastAdmin;
   document.body.classList.toggle("fixed", t === "cases");
   const inAdmin = ADMIN.includes(t);
+  document.body.classList.toggle("inadmin", inAdmin);
   if (inAdmin) lastAdmin = t;
   document.querySelectorAll("#main-nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t || (b.dataset.tab === "admin" && inAdmin) || (b.dataset.tab === "overview" && t === "cases")));
   document.querySelectorAll("#admin-nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));

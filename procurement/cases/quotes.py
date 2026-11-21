@@ -425,7 +425,7 @@ def _names(ids: list[str]) -> list[tuple[str, str]]:
 
 
 def view(case: F.Case) -> dict:
-    """Step 6 and 7 for a case: per category the quotes, the comparison, the summary and the award;
+    """Steps 5 and 6 for a case: per category the quotes, the comparison, the summary and the award;
     then the HOD email draft once every category has a vendor chosen."""
     if not case.approved_at or not case.vendor_picks:
         return {"open": False, "categories": [], "hod_draft": None}
@@ -652,7 +652,7 @@ def simulate_quote(uid: str, vendor_id: str, category: str) -> F.Case:
     return F.build_case(uid)
 
 
-# ── Step 7: the email to the HOD ───────────────────────────────────────────────────────────────
+# ── Step 6: the email to the HOD ───────────────────────────────────────────────────────────────
 
 
 def _table(cv: dict) -> list[str]:
@@ -714,7 +714,7 @@ def _facts(uid: str) -> dict:
 def send_hod(uid: str, to: str, subject: str, body: str, *, mark_only: bool = False, smtp_factory=smtplib.SMTP_SSL) -> dict:
     case = F.build_case(uid)
     if case.stage not in ("hod", "done"):
-        raise R.SendError("Choose the vendor in step 6 first.", 400)
+        raise R.SendError("Choose the vendor in step 5 first.", 400)
     addr, via = R.deliver(to, subject, body, mark_only=mark_only, smtp_factory=smtp_factory)
     state = F.load_state(uid)
     if state.get("hod"):

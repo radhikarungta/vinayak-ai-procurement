@@ -59,7 +59,7 @@ def cat(uid="2"):
 
 def test_rfqs_sent_with_no_quotes_waits_and_opens_step_6(vendors):
     c = ready(ids=("v1", "v2"))
-    assert c.stage == "rfq_sent" and c.quotes_in == 0 and "upload them in step 6" in c.headline
+    assert c.stage == "rfq_sent" and c.quotes_in == 0 and "upload them in step 5" in c.headline
     v = CQ.view(c)
     assert v["open"] and v["hod_draft"] is None
     g = v["categories"][0]
