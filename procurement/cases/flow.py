@@ -13,7 +13,9 @@ reason, …) are listed in the reply too.
 Then a person approves the items to go with (settled lines; skipped lines stay out). Only after
 approval does the vendor step (procurement/shortlist) run, per category on the approved item codes.
 The person picks the vendors, and an RFQ is drafted per picked vendor (procurement/cases/rfq.py).
-Changing an item after approval withdraws the approval and the vendor picks.
+The quotes that come back are compared, a vendor is chosen and the HOD is asked to approve it
+(procurement/cases/quotes.py). Changing an item after approval withdraws the approval, the vendor
+picks and everything after them.
 
 People decide; decisions are saved in data/cases/<uid>.json (git-ignored, CASES_DIR overrides).
 """
@@ -36,7 +38,7 @@ DEMO_INBOX = M.ROOT / "samples" / "demo_inbox.json"
 
 IssueKind = Literal["conflict", "partial", "no_match"]
 LineStatus = Literal["ready", "to_reply", "decided", "skipped"]
-Stage = Literal["item_codes", "waiting_on_site", "approve", "vendors", "rfq", "rfq_sent"]
+Stage = Literal["item_codes", "waiting_on_site", "approve", "vendors", "rfq", "rfq_sent", "quotes", "hod", "done"]
 
 # Which vendor category a line belongs to, from words in the line or the code's group.
 CATEGORY_WORDS: list[tuple[set[str], str]] = [
@@ -87,12 +89,14 @@ class SentReply(BaseModel):
     body: str
     at: str
     via: Literal["smtp", "marked"]
+    asked: list[str] | None = None  # line ids and "check:<id>" the reply covered (None: sent before this was kept)
 
 
 class SentRfq(SentReply):
     vendor_id: str
     vendor: str
     category: str
+    attached: list[str] = []
 
 
 class Case(BaseModel):
@@ -109,6 +113,9 @@ class Case(BaseModel):
     approved_at: str | None
     vendor_picks: dict[str, list[str]]  # category -> vendor ids
     rfqs: list[SentRfq]
+    quotes_in: int = 0  # quotes in for the picked vendors (uploaded or from the tender folder)
+    award: dict[str, dict] = {}  # category -> the vendor chosen, with the reason
+    hod: dict | None = None  # the email to the HOD: to, subject, at, via, approved_by_hod_at
     headline: str
 
 
@@ -135,7 +142,15 @@ def _withdraw(state: dict) -> None:
     state.pop("approved_at", None)
     state.pop("approved_codes", None)
     state.pop("vendor_picks", None)
+    state.pop("rfq_items", None)
     state.setdefault("rfq_history", []).extend(state.pop("rfqs", []))  # sent under an earlier approval
+    for k in ("quote_uploads", "pack_links", "manual_rates", "compare", "award"):  # the quotes answered those RFQs
+        if state.get(k):
+            state.setdefault("quotes_history", []).append({k: state[k], "at": now()})
+        state.pop(k, None)
+    if state.get("hod"):
+        state.setdefault("hod_history", []).append(state["hod"])
+    state.pop("hod", None)
 
 
 def save_state(uid: str, state: dict) -> None:
@@ -215,8 +230,8 @@ def build_line(m: LineMatch, decision: Decision | None) -> CaseLine:
                     decision=decision)
 
 
-def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None = False) -> Case:
-    rec = record(uid)
+def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None = False, rec: dict | None = None) -> Case:
+    rec = rec or record(uid)
     m = master or M.get_master()
     res = rec.get("result") or {}
     email = res.get("email") or {}
@@ -241,8 +256,16 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
     if approved and state.get("approved_codes") != approved_codes(lines):
         approved = None  # the items changed since approval (e.g. the ERP list was edited): approve again
     picked = {v for ids in picks.values() for v in ids}
+    quotes_in, awards, hod = 0, state.get("award") or {}, state.get("hod") or {}
+    if approved and picked:
+        from . import quotes as CQ  # noqa: PLC0415 - quotes imports this module
+
+        quotes_in = len(CQ.sources(uid, picks, lines, state)[0])
+    awarded = bool(approved and picked) and all(c in awards for c, ids in picks.items() if ids)
+    last = (state.get("replies") or [None])[-1]
+    new_qs = bool(last) and asked_since(last, open_lines, blocking, state.get("redecided", []))
     if counts["to_reply"] or blocking:
-        stage: Stage = "waiting_on_site" if state.get("replies") else "item_codes"
+        stage: Stage = "waiting_on_site" if last and not new_qs else "item_codes"
     elif not settled:
         stage = "item_codes"
     elif not approved:
@@ -251,6 +274,10 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
         stage = "vendors"
     elif {(c, v) for c, ids in picks.items() for v in ids} - {(r.category, r.vendor_id) for r in rfqs}:
         stage = "rfq"
+    elif awarded:
+        stage = "done" if hod.get("approved_by_hod_at") else "hod"
+    elif quotes_in:
+        stage = "quotes"
     else:
         stage = "rfq_sent"
 
@@ -264,18 +291,43 @@ def build_case(uid: str, *, master: M.Master | None = None, use_llm: bool | None
         left = len({(c, v) for c, ids in picks.items() for v in ids} - {(r.category, r.vendor_id) for r in rfqs})
         headline = f"{len(picked)} vendor{'s' * (len(picked) != 1)} picked. {left} RFQ{'s' * (left != 1)} still to send."
     elif stage == "rfq_sent":
-        headline = f"RFQs sent to all {len(picked)} picked vendor{'s' * (len(picked) != 1)}. Next: read the quotes."
+        headline = f"RFQs sent to all {len(picked)} picked vendor{'s' * (len(picked) != 1)}. Waiting for quotes: upload them in step 6."
+    elif stage == "quotes":
+        headline = f"{quotes_in} quote{'s' * (quotes_in != 1)} in from {len(picked)} picked vendor{'s' * (len(picked) != 1)}. Compare them and choose the vendor."
+    elif stage in ("hod", "done"):
+        who = ", ".join(a["vendor"] for c, a in awards.items() if picks.get(c))
+        headline = (f"HOD approved {who}." if stage == "done" else
+                    f"{who} chosen. Sent to the HOD, awaiting approval." if hod else f"{who} chosen. Next: email the HOD for approval.")
     else:
         bits = [f"{counts[k]} {w}" for k, w in (("conflict", "with a code conflict"), ("partial", "partly matched"), ("no_match", "with no item code")) if counts[k]]
         bits += [f"{len(blocking)} email problem{'s' * (len(blocking) != 1)} that stop{'s' * (len(blocking) == 1)} the tender"] if blocking else []
         headline = f"{settled} of {n} line{'s' * (n != 1)} ready. To ask the site: " + (", ".join(bits) or "nothing") + "."
         if stage == "waiting_on_site":
             headline += " Reply sent; waiting on the site."
+        elif new_qs:
+            headline += " New questions since the last reply: send another."
     return Case(uid=uid, subject=email.get("subject"), sender=email.get("sender"), date=email.get("date"),
                 project=((res.get("requirement") or {}).get("project") or {}).get("value"),
                 lines=lines, email_checks=checks, stage=stage, counts=counts,
                 replies=[SentReply(**r) for r in state.get("replies", [])], approved_at=approved,
-                vendor_picks=picks if approved else {}, rfqs=rfqs, headline=headline)
+                vendor_picks=picks if approved else {}, rfqs=rfqs, quotes_in=quotes_in,
+                award={c: a for c, a in awards.items() if picks.get(c)} if approved else {}, hod=hod or None, headline=headline)
+
+
+def asked_ids(case: Case) -> list[str]:
+    """What a reply sent now covers: the undecided lines and the open email checks."""
+    return [ln.id for ln in case.lines if ln.status == "to_reply"] + [f"check:{c['id']}" for c in case.email_checks if not c.get("resolved")]
+
+
+def asked_since(last: dict, open_lines: list[CaseLine], blocking: list[dict], redecided: list[str] = ()) -> bool:
+    """A question the last reply to the site didn't ask: a line or a blocking check it didn't cover,
+    or a line marked "ask the site" after it went that it didn't ask (or that was decided since)."""
+    asked = last.get("asked")
+    if asked is not None and ({ln.id for ln in open_lines} | {f"check:{c['id']}" for c in blocking}) - set(asked):
+        return True
+    sent = datetime.fromisoformat(last["at"])
+    return any(ln.decision and ln.decision.action == "ask_site"
+               and (ln.id in redecided or (asked is None and datetime.fromisoformat(ln.decision.at) > sent)) for ln in open_lines)
 
 
 def decide(uid: str, line_id: str, action: str, codes: list[str] | None = None, note: str | None = None,
@@ -286,6 +338,8 @@ def decide(uid: str, line_id: str, action: str, codes: list[str] | None = None, 
     if line is None:
         raise CaseError(f"No line {line_id} in this requirement.")
     state = load_state(uid)
+    if action != "ask_site" and state.get("replies") and line_id not in state.setdefault("redecided", []):
+        state["redecided"].append(line_id)  # settled after the reply went: asking about it again is a new question
     if action == "clear":
         state["decisions"].pop(line_id, None)
     else:
@@ -334,8 +388,11 @@ def approve(uid: str, approved: bool = True, *, master: M.Master | None = None) 
             raise CaseError("A problem with the email stops the tender. Sort it out first.")
         if not case.counts["ready"] + case.counts["decided"]:
             raise CaseError("No line has an item code to approve.")
+        codes = approved_codes(case.lines)
+        if state.get("approved_at") and state.get("approved_codes") != codes:
+            _withdraw(state)  # the items changed since the last approval: its picks, quotes and HOD email don't stand
         state["approved_at"] = now()
-        state["approved_codes"] = approved_codes(case.lines)
+        state["approved_codes"] = codes
     else:
         _withdraw(state)
     save_state(uid, state)
@@ -369,7 +426,7 @@ def vendors_for(case: Case) -> dict:
     groups, no_cat = approved_groups(case)
     out = []
     for cat, lines in groups.items():
-        codes = list(dict.fromkeys(c for ln in lines for c in ln.codes))
+        codes = category_codes(lines)
         res = S.shortlist(cat, codes)
         picked = case.vendor_picks.get(cat)
         vendors = [v.model_dump() | {"picked": (v.vendor_id in picked) if picked is not None else v.selected} for v in res.vendors]
@@ -377,6 +434,39 @@ def vendors_for(case: Case) -> dict:
                     "vendors": vendors, "excluded": [e.model_dump() for e in res.excluded], "notes": res.notes, "min_rfq": S.MIN_RFQ})
     notes = [f"No vendor category known for: {t}. It can't go to vendors yet." for t in no_cat]
     return {"ran": True, "groups": out, "notes": notes}
+
+
+def category_codes(lines: list[CaseLine]) -> list[str]:
+    return list(dict.fromkeys(c for ln in lines for c in ln.codes))
+
+
+def rfq_key(vendor_id: str, category: str) -> str:
+    return f"{vendor_id}|{category}"
+
+
+def pick_rfq_items(uid: str, vendor_id: str, category: str, codes: list[str], *, master: M.Master | None = None) -> Case:
+    """Which of the category's approved item codes go on the RFQ to one vendor (none saved: all)."""
+    case = build_case(uid, master=master)
+    if not case.approved_at:
+        raise CaseError("Approve the items first.")
+    groups, _ = approved_groups(case)
+    if category not in groups:
+        raise CaseError(f"No approved items in {category}.")
+    if vendor_id not in case.vendor_picks.get(category, []):
+        raise CaseError(f"Vendor {vendor_id} isn't picked for {category}.")
+    if any((r.vendor_id, r.category) == (vendor_id, category) for r in case.rfqs):
+        raise CaseError("That RFQ was already sent; its items can't change.")
+    codes = [c.strip() for c in codes if c.strip()]
+    if not codes:
+        raise CaseError("An RFQ needs at least one item.")
+    avail = category_codes(groups[category])
+    bad = [c for c in codes if c not in avail]
+    if bad:
+        raise CaseError(f"Not an approved {category} item: {', '.join(bad)}.")
+    state = load_state(uid)
+    state.setdefault("rfq_items", {})[rfq_key(vendor_id, category)] = [c for c in avail if c in codes]
+    save_state(uid, state)
+    return build_case(uid, master=master)
 
 
 def pick_vendors(uid: str, category: str, vendor_ids: list[str], *, master: M.Master | None = None) -> Case:
@@ -390,12 +480,18 @@ def pick_vendors(uid: str, category: str, vendor_ids: list[str], *, master: M.Ma
 
     if not vendor_ids:
         raise CaseError("Pick at least one vendor.")
-    codes = list(dict.fromkeys(c for ln in groups[category] for c in ln.codes))
+    codes = category_codes(groups[category])
     allowed = {v.vendor_id for v in S.shortlist(category, codes).vendors}
     bad = [v for v in vendor_ids if v not in allowed]
     if bad:
         raise CaseError(f"Not on the {category} shortlist (unknown, blocked or another category): {', '.join(bad)}.")
     state = load_state(uid)
-    state.setdefault("vendor_picks", {})[category] = list(dict.fromkeys(vendor_ids))
+    new = list(dict.fromkeys(vendor_ids))
+    if new != (state.get("vendor_picks") or {}).get(category):
+        from . import quotes as CQ  # noqa: PLC0415
+
+        (state.get("compare") or {}).pop(category, None)
+        CQ.drop_award(state, category)
+    state.setdefault("vendor_picks", {})[category] = new
     save_state(uid, state)
     return build_case(uid, master=master)

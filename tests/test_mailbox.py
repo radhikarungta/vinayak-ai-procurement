@@ -71,12 +71,16 @@ def test_sync_without_key_saves_and_retries_later(monkeypatch):
 
     # A key appears: the same two emails are read on the next sync, and not again after that.
     ref = extract.extract_replay(SAMPLES / "riverside_t2_waterproofing.extraction.json")
-    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(parse=lambda **k: SimpleNamespace(stop_reason="end_turn", parsed_output=ref))))
+    client = SimpleNamespace(responses=SimpleNamespace(parse=lambda **k: SimpleNamespace(status="completed", output=[], output_parsed=ref)))
     monkeypatch.setattr(extract, "has_credentials", lambda: True)
     assert mailbox.sync(CFG, imap_factory=FakeImap, client=client)["read"] == 2
     assert mailbox.sync(CFG, imap_factory=FakeImap, client=client)["fetched"] == 0
     item = mailbox.list_inbox()[0]
     assert item["status"] == "read" and item["blocking"] == 1 and item["project"] == "Vinayak Riverside"
+    # The quantity sheet intake read is kept, so an RFQ can attach it.
+    kept = mailbox.saved_attachment("41", "T2_waterproofing_quantities.xlsx")
+    assert kept and kept.read_bytes() == (SAMPLES / "T2_waterproofing_quantities.xlsx").read_bytes()
+    assert mailbox.saved_attachment("41", "other.xlsx") is None and mailbox.saved_attachment("41", None) is None
 
 
 def test_config_rejects_unsafe_sender(monkeypatch):
@@ -99,3 +103,18 @@ def test_dedicated_address_reads_everything(monkeypatch):
     mailbox.fetch_messages(cfg, set(), imap_factory=FakeImap)
     searches = [a[1] for c, a in FakeImap.instances[0].commands if c == "SEARCH"]
     assert len(searches) == 1 and searches[0].startswith("(SINCE ") and "FROM" not in searches[0]
+
+
+def test_a_disk_error_keeping_the_sheet_still_saves_the_read_email(monkeypatch, caplog):
+    ref = extract.extract_replay(SAMPLES / "riverside_t2_waterproofing.extraction.json")
+    client = SimpleNamespace(responses=SimpleNamespace(parse=lambda **k: SimpleNamespace(status="completed", output=[], output_parsed=ref)))
+    monkeypatch.setattr(extract, "has_credentials", lambda: True)
+
+    def broken(self, data):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_bytes", broken)
+    assert mailbox.sync(CFG, imap_factory=FakeImap, client=client)["read"] == 2
+    assert {i["status"] for i in mailbox.list_inbox()} == {"read"}
+    assert mailbox.saved_attachment("41", "T2_waterproofing_quantities.xlsx") is None
+    assert "disk full" in caplog.text

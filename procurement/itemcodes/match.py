@@ -8,7 +8,7 @@ shared words (after the synonym map in master.py) and gets a shortlist, a kind a
            two codes, e.g. toilet floor + toilet wall).
 - none:    nothing close; a new code is suggested on the nearest code pattern and checked unused.
 
-When an Anthropic API key is set, Claude may choose among the shortlist and write the reason.
+When OPENAI_API_KEY is set, the model may choose among the shortlist and write the reason.
 It can only pick codes from the shortlist; anything else falls back to the rule-based answer.
 A person makes the final call either way.
 """
@@ -22,6 +22,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .. import llm
 from ..intake import extract
 from . import master as M
 
@@ -84,11 +85,11 @@ class LineMatch(BaseModel):
     suggestion: Suggestion | None = None
     flags: list[Flag] = []
     candidates: list[Candidate]
-    decided_by: Literal["rules", "claude"] = "rules"
+    decided_by: Literal["rules", "llm"] = "rules"
 
 
 class MatchResult(BaseModel):
-    mode: Literal["rules", "claude"]
+    mode: Literal["rules", "llm"]
     model: str | None
     message: str | None
     lines: list[LineMatch]
@@ -312,7 +313,7 @@ def match_rules(lines: list[RequirementLine], master: M.Master) -> list[LineMatc
     return [match_line(ln, master) for ln in lines]
 
 
-# ── Claude chooses among the shortlist (optional) ──────────────────────────────────────────────
+# ── The model chooses among the shortlist (optional) ───────────────────────────────────────────
 
 SYSTEM = """You help the procurement back office of a residential developer in Kolkata, India, map requirement lines to ERP item codes for waterproofing work.
 
@@ -355,7 +356,7 @@ def _prompt(rule: list[LineMatch]) -> str:
 
 
 def apply_picks(rule: list[LineMatch], picks: list[Pick], master: M.Master) -> list[LineMatch]:
-    """Use Claude's pick where it is valid; keep the rule-based answer where it isn't."""
+    """Use the model's pick where it is valid; keep the rule-based answer where it isn't."""
     idx = _index(master)
     by_id = {p.line_id: p for p in picks}
     out = []
@@ -363,11 +364,11 @@ def apply_picks(rule: list[LineMatch], picks: list[Pick], master: M.Master) -> l
         p = by_id.get(m.line.id)
         short = {c.code: c for c in m.candidates}
         if p is None:
-            out.append(m.model_copy(update={"flags": m.flags + [Flag(tone="warn", text="Claude gave no answer for this line, so the rule-based answer is shown.")]}))
+            out.append(m.model_copy(update={"flags": m.flags + [Flag(tone="warn", text="The model gave no answer for this line, so the rule-based answer is shown.")]}))
             continue
         valid = (p.code is None) == (p.kind == "none") and (p.code is None or p.code in short)
         if not valid:
-            out.append(m.model_copy(update={"flags": m.flags + [Flag(tone="warn", text=f"Claude picked {p.code or 'nothing'}, which isn't on the shortlist, so the rule-based answer is shown.")]}))
+            out.append(m.model_copy(update={"flags": m.flags + [Flag(tone="warn", text=f"The model picked {p.code or 'nothing'}, which isn't on the shortlist, so the rule-based answer is shown.")]}))
             continue
         c = short.get(p.code) if p.code else None
         toks = M.tokens(m.line.text)
@@ -383,31 +384,24 @@ def apply_picks(rule: list[LineMatch], picks: list[Pick], master: M.Master) -> l
         out.append(m.model_copy(update={
             "kind": p.kind, "code": p.code, "erp_text": c.text if c else None, "erp_rows": c.rows if c else [],
             "also": m.also if p.code == m.code else [], "reason": p.reason.strip(), "suggestion": suggestion,
-            "flags": flags, "decided_by": "claude",
+            "flags": flags, "decided_by": "llm",
         }))
     return out
 
 
-def pick_with_claude(rule: list[LineMatch], client=None) -> list[Pick]:
-    import anthropic
-
-    client = client or extract._client()
+def pick_with_llm(rule: list[LineMatch], client=None) -> list[Pick]:
     try:
-        response = client.beta.messages.parse(
-            model=extract.MODEL,
-            max_tokens=8000,
-            system=SYSTEM,
-            output_config={"effort": "low"},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            messages=[{"role": "user", "content": _prompt(rule)}],
-            output_format=Picks,
+        parsed = llm.parse(
+            client or extract._client(),
+            text_format=Picks,
+            instructions=SYSTEM,
+            user=_prompt(rule),
+            max_output_tokens=8000,
+            effort="low",
         )
-    except anthropic.APIError as e:
-        raise extract.IntakeError(f"Claude couldn't be reached ({type(e).__name__}).") from e
-    if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
-        raise extract.IntakeError("Claude's answer didn't come back complete.")
-    return response.parsed_output.picks
+    except llm.LLMError as e:
+        raise extract.IntakeError(f"The model couldn't choose the codes: {e}") from e
+    return parsed.picks
 
 
 _llm_cache: dict[str, list[Pick]] = {}
@@ -418,17 +412,17 @@ def match_lines(lines: list[RequirementLine], master: M.Master, *, use_llm: bool
     if use_llm is None:
         use_llm = llm_enabled()
     if not use_llm or not lines:
-        return MatchResult(mode="rules", model=None, message="Matched by rules (shared words and a synonym list). Set ANTHROPIC_API_KEY to let Claude choose among the shortlist.", lines=rule)
+        return MatchResult(mode="rules", model=None, message="Matched by rules (shared words and a synonym list). Set OPENAI_API_KEY to let the model choose among the shortlist.", lines=rule)
     key = json.dumps([ln.model_dump() for ln in lines], sort_keys=True) + master.path
     try:
         picks = _llm_cache.get(key) if client is None else None
         if picks is None:
-            picks = pick_with_claude(rule, client=client)
+            picks = pick_with_llm(rule, client=client)
             if client is None:
                 _llm_cache[key] = picks
     except extract.IntakeError as e:
         return MatchResult(mode="rules", model=None, message=f"{e} Showing the rule-based match.", lines=rule)
-    return MatchResult(mode="claude", model=extract.MODEL, message="Claude chose among the rule-based shortlist and wrote the reasons. It can only pick listed codes.", lines=apply_picks(rule, picks, master))
+    return MatchResult(mode="llm", model=llm.model(), message="The model chose among the rule-based shortlist and wrote the reasons. It can only pick listed codes.", lines=apply_picks(rule, picks, master))
 
 
 # ── Lines from a demo inbox record ─────────────────────────────────────────────────────────────

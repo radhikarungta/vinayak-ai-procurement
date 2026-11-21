@@ -222,19 +222,19 @@ def test_lines_from_requirement_split_by_scope_area(master):
     assert len(scaff) == 1 and "North face" in scaff[0].text
 
 
-# ── Claude chooses from the shortlist ──────────────────────────────────────────────────────────
+# ── The model chooses from the shortlist ───────────────────────────────────────────────────────
 
 
 def fake_client(picks):
     parsed = X.Picks(picks=[X.Pick(**p) for p in picks])
-    resp = SimpleNamespace(stop_reason="end_turn", parsed_output=parsed)
+    resp = SimpleNamespace(status="completed", output=[], output_parsed=parsed)
     calls = []
 
     def parse(**kw):
         calls.append(kw)
         return resp
 
-    return SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(parse=parse))), calls
+    return SimpleNamespace(responses=SimpleNamespace(parse=parse)), calls
 
 
 def test_rules_mode_without_a_key(master):
@@ -242,22 +242,23 @@ def test_rules_mode_without_a_key(master):
     assert res.mode == "rules" and res.lines[0].decided_by == "rules"
 
 
-def test_claude_pick_from_shortlist_is_used(master):
+def test_model_pick_from_shortlist_is_used(master):
     client, calls = fake_client([{"line_id": "1", "code": "WP.01.A", "kind": "exact", "reason": "Same item, spec A."}])
     res = X.match_lines([line("waterproofing at toilet floor")], master, use_llm=True, client=client)
-    assert res.mode == "claude" and calls and calls[0]["model"] == extract.MODEL
+    assert res.mode == "llm" and calls and calls[0]["model"] == extract.llm.model()
+    assert calls[0]["text_format"] is X.Picks and calls[0]["store"] is False
     m = res.lines[0]
-    assert (m.code, m.decided_by, m.reason) == ("WP.01.A", "claude", "Same item, spec A.")
+    assert (m.code, m.decided_by, m.reason) == ("WP.01.A", "llm", "Same item, spec A.")
 
 
-def test_claude_pick_outside_shortlist_falls_back(master):
+def test_model_pick_outside_shortlist_falls_back(master):
     client, _ = fake_client([{"line_id": "1", "code": "WP.99", "kind": "exact", "reason": "Made up."}])
     m = X.match_lines([line("waterproofing at toilet floor")], master, use_llm=True, client=client).lines[0]
     assert (m.code, m.decided_by) == ("WP.01", "rules")
     assert any("isn't on the shortlist" in f.text for f in m.flags)
 
 
-def test_claude_none_gets_a_new_code_suggestion(master):
+def test_model_none_gets_a_new_code_suggestion(master):
     client, _ = fake_client([{"line_id": "1", "code": None, "kind": "none", "reason": "Not waterproofing."}])
     m = X.match_lines([line("waterproofing at toilet floor")], master, use_llm=True, client=client).lines[0]
     assert m.kind == "none" and m.code is None and m.suggestion.code not in master.codes()

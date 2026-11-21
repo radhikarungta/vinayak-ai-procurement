@@ -8,6 +8,8 @@
   const ESC = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"};
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ESC[c]);
   const pct = x => `${Math.round(x * 100)}%`;
+  // Values made up by scripts/make_demo_vendor_data.py. Same tone as the page's "Demo data" chip.
+  const DEMO = `<span class="chip warn" title="Made up for the demo, not real history">demo</span>`;
 
   async function getJSON(url) {
     const r = await fetch(url);
@@ -30,7 +32,8 @@
 .sl .cov{display:inline-block;width:60px;height:6px;border-radius:3px;background:var(--sunk);vertical-align:middle;margin-right:6px;overflow:hidden}
 .sl .cov span{display:block;height:100%;background:var(--accent)}
 .sl .fx{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:.82rem}
-.sl .fx .k{display:inline-block;min-width:118px;color:var(--muted)}
+.sl .fx .k{display:inline-block;min-width:140px;color:var(--muted)}
+.sl .fx .chip{font-size:.7rem;padding:1px 7px}
 .sl .fx .nd{color:var(--muted);font-style:italic}
 .sl tr.on td{background:var(--accent-soft)}
 .sl input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent)}`;
@@ -39,7 +42,7 @@
 
   function factorList(fs) {
     return `<ul class="fx">${fs.map(f => `<li><span class="k">${esc(f.label)} <span class="mono">${f.score == null ? "—" : Math.round(f.score * 100)}</span></span>
-      <span class="${f.score == null ? "nd" : ""}">${f.score == null ? "No data. " : ""}${esc(f.reason)}</span></li>`).join("")}</ul>`;
+      <span class="${f.score == null ? "nd" : ""}">${f.score == null ? "No data. " : ""}${esc(f.reason)}</span>${f.demo ? " " + DEMO : ""}</li>`).join("")}</ul>`;
   }
 
   function row(v) {
@@ -47,7 +50,7 @@
     return `<tr class="${v.selected ? "on" : ""}" data-id="${esc(v.vendor_id)}">
       <td><input type="checkbox" data-tick="${esc(v.vendor_id)}" ${v.selected ? "checked" : ""} aria-label="Send RFQ to ${esc(v.name)}"></td>
       <td class="n">${rank}</td>
-      <td><b>${esc(v.name)}</b>${v.notes.length ? `<ul class="plain small muted" style="margin-top:4px">${v.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</td>
+      <td><b>${esc(v.name)}</b>${v.demo ? " " + DEMO : ""}${v.notes.length ? `<ul class="plain small muted" style="margin-top:4px">${v.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</td>
       <td class="n">${v.score == null ? `<span class="muted">no data</span>` : v.score.toFixed(1)}</td>
       <td class="n"><span class="cov"><span style="width:${pct(v.coverage)}"></span></span>${pct(v.coverage)}</td>
       <td style="min-width:320px">${factorList(v.factors)}</td>

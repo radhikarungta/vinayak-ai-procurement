@@ -158,8 +158,8 @@ class FakeImap:
         pass
 
 
-class NoClaude:
-    """Counts Claude calls and fails the test if a skipped email reaches Claude."""
+class CountingModel:
+    """A stand-in OpenAI client: counts model calls and fails the test if a skipped email reaches the model."""
 
     def __init__(self):
         self.calls = 0
@@ -168,9 +168,9 @@ class NoClaude:
         def parse(**k):
             self.calls += 1
             assert "cementweekly" not in json.dumps(k, default=str)
-            return SimpleNamespace(stop_reason="end_turn", parsed_output=ref)
+            return SimpleNamespace(status="completed", output=[], output_parsed=ref)
 
-        self.beta = SimpleNamespace(messages=SimpleNamespace(parse=parse))
+        self.responses = SimpleNamespace(parse=parse)
 
 
 @pytest.fixture
@@ -179,11 +179,11 @@ def store(tmp_path, monkeypatch):
     return tmp_path / "inbox"
 
 
-def test_sync_skips_blocked_mail_without_calling_claude(store, monkeypatch):
+def test_sync_skips_blocked_mail_without_calling_the_model(store, monkeypatch):
     monkeypatch.setattr(extract, "has_credentials", lambda: True)
     R.add_rule({"action": "block", "field": "sender_domain", "match": "equals", "value": "cementweekly.com", "note": "newsletter"})
     cfg = mailbox.MailConfig(address="t@gmail.com", password="x", watch_from=[])
-    client = NoClaude()
+    client = CountingModel()
     out = mailbox.sync(cfg, imap_factory=FakeImap, client=client)
     assert out == {"fetched": 2, "read": 1, "failed": 0, "skipped": 1, "waiting_for_key": 0}
     assert client.calls == 1

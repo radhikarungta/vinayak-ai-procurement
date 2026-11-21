@@ -18,7 +18,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="procurement", description="Read a site requirement email into a structured requirement + BOQ checks.")
     ap.add_argument("email", type=Path, help=".eml file, or a .txt of pasted email text")
     ap.add_argument("--attach", type=Path, action="append", default=[], help="extra attachment (e.g. the quantity sheet for a .txt email)")
-    ap.add_argument("--replay", type=Path, help="use a saved extraction JSON instead of calling Claude")
+    ap.add_argument("--replay", type=Path, help="use a saved extraction JSON instead of calling the model")
     a = ap.parse_args()
 
     extra = [RawAttachment(p.name, "application/octet-stream", p.read_bytes()) for p in a.attach]

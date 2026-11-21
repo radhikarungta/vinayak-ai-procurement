@@ -189,3 +189,34 @@ def test_api_summary(client, paths):
     assert stats["With contact details"]["value"] == 1 and stats["With past performance"]["value"] == 1
     assert all(x["tone"] in {"good", "warn", "bad", None} for x in s["stats"])
     assert s["ready"] is True
+
+
+def test_api_credit_terms(client, paths):
+    vid = client.post("/api/vendors", json={"name": "Hotel Supplies"}).json()["id"]
+    v = client.get(f"/api/vendors/{vid}").json()
+    assert v["credit_days"] is None and v["advance_pct"] is None and v["credit_label"] == "not known"
+    v = client.patch(f"/api/vendors/{vid}", json={"credit_days": 45, "advance_pct": 10}).json()
+    assert (v["credit_days"], v["advance_pct"], v["credit_label"]) == (45, 10, "45 days credit, 10% advance")
+    # Editing another field leaves credit terms alone; null clears them back to "not known" (not 0).
+    assert client.patch(f"/api/vendors/{vid}", json={"city": "Howrah"}).json()["credit_days"] == 45
+    v = client.patch(f"/api/vendors/{vid}", json={"credit_days": None, "advance_pct": None}).json()
+    assert v["credit_days"] is None and v["advance_pct"] is None
+    assert client.patch(f"/api/vendors/{vid}", json={"credit_days": 0}).json()["credit_label"] == "advance / on delivery"
+    assert client.patch(f"/api/vendors/{vid}", json={"credit_days": -1}).status_code == 422
+    assert client.patch(f"/api/vendors/{vid}", json={"advance_pct": 101}).status_code == 422
+
+
+def test_editing_a_demo_value_makes_it_real(paths):
+    t = store.now()
+    v = store.Vendor(id="v1", name="India Demo", categories=["Cement", "Steel"], credit_days=30, advance_pct=20,
+                     demo_fields=["credit_days", "advance_pct"], demo_categories=["Cement", "Steel"], created_at=t, updated_at=t)
+    store.save_all([v])
+    v = store.update("v1", store.VendorFields(credit_days=60, categories=["Steel"]))
+    assert v.demo_fields == ["advance_pct"] and v.demo_categories == ["Steel"]
+    out = store.public(v)
+    assert out["demo_fields"] == ["advance_pct"] and out["performance_summary"]["demo"] == 0
+
+
+def test_summary_counts_demo_records():
+    recs = [rec() | {"source": "demo"}, rec()]
+    assert store.performance_summary(recs)["demo"] == 1

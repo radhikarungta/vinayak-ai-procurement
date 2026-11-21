@@ -1,4 +1,4 @@
-"""Email allow/block rules: decide which inbox emails get read, before any Claude call.
+"""Email allow/block rules: decide which inbox emails get read, before any model call.
 
 A rule looks at one part of an email (field) and tests it (match) against a value. All matching
 ignores case.

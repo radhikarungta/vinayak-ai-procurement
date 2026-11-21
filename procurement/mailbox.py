@@ -4,7 +4,7 @@ Connects over IMAP with a Gmail app password (Google Account → Security → 2-
 App passwords). Messages are fetched with BODY.PEEK, so nothing is marked as read. Each result is
 saved to data/inbox/<uid>.json; a UID already saved is never processed again.
 
-Before any Claude call, each email is checked against the email rules (procurement/email_rules).
+Before any model call, each email is checked against the email rules (procurement/email_rules).
 An email a rule blocks or holds is saved with status "skipped" and the decision, costs nothing,
 and is not retried. Delete its data/inbox/<uid>.json to have the next sync look at it again.
 
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import imaplib
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -34,6 +35,8 @@ from dotenv import load_dotenv
 from .email_rules import EmailFacts, RuleError, active_rules, evaluate
 from .intake import extract
 from .intake.pipeline import load_email, run_intake
+
+log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 STORE = ROOT / "data" / "inbox"
@@ -131,6 +134,17 @@ def load_result(uid: str) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def attachment_path(uid: str, filename: str) -> Path:
+    """Where an attachment read by intake (the quantity sheet) is kept, so an RFQ can attach it."""
+    name = Path(filename).name
+    return STORE / f"{int(uid)}.files" / (name if name.strip(".") else "attachment")
+
+
+def saved_attachment(uid: str, filename: str | None) -> Path | None:
+    p = attachment_path(uid, filename) if filename else None
+    return p if p and p.is_file() else None
+
+
 def list_inbox() -> list[dict]:
     items = []
     for p in STORE.glob("*.json") if STORE.exists() else []:
@@ -180,7 +194,7 @@ def sync(cfg: MailConfig, imap_factory=imaplib.IMAP4_SSL, client=None) -> dict:
             rec |= {"status": "skipped", "error": decision["reason"]}
             skipped += 1
         elif not live:
-            rec |= {"status": "needs_key", "error": "Fetched, not read yet: set ANTHROPIC_API_KEY and sync again."}
+            rec |= {"status": "needs_key", "error": "Fetched, not read yet: set OPENAI_API_KEY and sync again."}
         else:
             try:
                 rec |= {"status": "read", "result": run_intake(mail, client=client).model_dump(mode="json")}
@@ -188,9 +202,25 @@ def sync(cfg: MailConfig, imap_factory=imaplib.IMAP4_SSL, client=None) -> dict:
             except extract.IntakeError as e:
                 rec |= {"status": "failed", "error": str(e)}
                 failed += 1
+            else:
+                _keep_sheet(uid, mail, rec["result"])
         _path(uid).write_text(json.dumps(rec, indent=2))
     return {"fetched": len(new), "read": done, "failed": failed, "skipped": skipped,
             "waiting_for_key": len(new) - done - failed - skipped}
+
+
+def _keep_sheet(uid: str, mail, result: dict) -> None:
+    """Keep the quantity sheet intake read, to attach to RFQs. A disk error only loses the attachment,
+    not the (paid-for) intake record."""
+    for a in mail.attachments:
+        if a.filename == ((result.get("quantities") or {}).get("filename")):
+            try:
+                p = attachment_path(uid, a.filename)
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(a.data)
+            except OSError as e:
+                log.warning("Couldn't keep the quantity sheet of email %s: %s", uid, e)
+            return
 
 
 def _safe_sender(s: str) -> bool:

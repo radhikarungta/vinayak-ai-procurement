@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-# ── What Claude returns ────────────────────────────────────────────────────────────────────────
+# ── What the model returns ───────────────────────────────────────────────────────────────────
 # Every field carries the verbatim `quote` it was read from. After extraction, each quote is
 # checked against the email text (see extract.verify_quotes). A field whose quote isn't in the
 # email is dropped, never shown. This is the same idea as IndustryPrime's anti-fabrication

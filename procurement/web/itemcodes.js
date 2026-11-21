@@ -44,7 +44,7 @@
     return `<tr>
       <td><div>${esc(m.line.text)}</div><div class="small muted">${esc(src)}</div>${m.line.detail ? `<div class="small muted">${esc(m.line.detail)}</div>` : ""}</td>
       <td class="mono">${m.code ? esc(m.code) : `<span class="muted">none</span>`}</td>
-      <td><span class="chip ${tone}">${label}</span>${m.decided_by === "claude" ? `<div class="small muted" style="margin-top:4px">by Claude</div>` : ""}</td>
+      <td><span class="chip ${tone}">${label}</span>${m.decided_by === "llm" ? `<div class="small muted" style="margin-top:4px">by the model</div>` : ""}</td>
       <td>${m.erp_text ? esc(m.erp_text) : `<span class="muted">No ERP item</span>`}${m.erp_rows && m.erp_rows.length ? `<div class="small muted">sheet row ${m.erp_rows.map(esc).join(", ")}</div>` : ""}</td>
       <td style="min-width:260px"><p>${esc(m.reason)}</p>${also}${sugg}${flags ? `<ul class="plain small" style="list-style:none;padding:0;margin-top:6px">${flags}</ul>` : ""}${cands}</td>
     </tr>`;
@@ -53,8 +53,8 @@
   function matchesView(res) {
     if (res.ready === false) return `<div class="err">${esc(res.message)}</div>`;
     if (!res.lines.length) return `<div class="empty">This email has no lines to match.</div>`;
-    const mode = res.mode === "claude"
-      ? `<span class="chip acc">Chosen by Claude${res.model ? " · " + esc(res.model) : ""}</span>`
+    const mode = res.mode === "llm"
+      ? `<span class="chip acc">Chosen by the model${res.model ? " · " + esc(res.model) : ""}</span>`
       : `<span class="chip">Matched by rules</span>`;
     return `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">${mode}<span class="small muted">${esc(res.message || "")}</span></div>
       <p class="small muted">${res.from_sheet ? "Lines come from the attached quantity sheet." : "No quantity sheet, so lines come from the work type and scope in the email."}</p>
@@ -140,7 +140,7 @@
       try {
         cache[key] = cache[key] || await getJSON(`/api/itemcodes/match/${encodeURIComponent(uid)}${mode ? "?mode=" + mode : ""}`);
         const res = cache[key];
-        box.innerHTML = matchesView(res) + (res.mode === "claude" ? `<div><button class="btn" data-ic="rules">Show the rule-based answer</button></div>` : mode === "rules" ? `<div><button class="btn" data-ic="auto">Back to Claude's answer</button></div>` : "");
+        box.innerHTML = matchesView(res) + (res.mode === "llm" ? `<div><button class="btn" data-ic="rules">Show the rule-based answer</button></div>` : mode === "rules" ? `<div><button class="btn" data-ic="auto">Back to the model's answer</button></div>` : "");
         const r = box.querySelector('[data-ic="rules"]'), a = box.querySelector('[data-ic="auto"]');
         if (r) r.onclick = () => show(uid, "rules");
         if (a) a.onclick = () => show(uid, null);

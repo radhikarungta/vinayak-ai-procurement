@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import mailbox  # loads .env
+from . import llm, mailbox  # mailbox loads .env
 from .intake import extract
 from .intake.email_parser import RawAttachment
 from .intake.models import IntakeResult
@@ -36,9 +36,19 @@ def page() -> FileResponse:
     return FileResponse(Path(__file__).parent / "web" / "intake.html")
 
 
+@app.get("/demo")
+def demo_page() -> FileResponse:
+    """The hand-typed walkthrough of steps 4–6 (root index.html), until those steps run for real."""
+    return FileResponse(ROOT / "index.html")
+
+
 @app.get("/api/status")
 def status() -> dict:
-    return {"live": extract.has_credentials() and os.environ.get("INTAKE_REPLAY") != "1", "model": extract.MODEL}
+    """Drives the app bar chip: "Live · <model>" with OPENAI_API_KEY set, "Replay mode · no OPENAI_API_KEY" without."""
+    s = llm.status()
+    live = extract.has_credentials() and os.environ.get("INTAKE_REPLAY") != "1"
+    label = s["label"] if live or not extract.has_credentials() else "Replay mode · INTAKE_REPLAY=1"
+    return {"live": live, "model": s["model"], "label": label}
 
 
 @app.get("/api/samples/riverside", response_model=IntakeResult)
@@ -95,7 +105,7 @@ async def intake_email(
     if not extract.has_credentials():
         raise HTTPException(
             503,
-            "No Anthropic API key is set, so only the sample can run (in replay mode). Set ANTHROPIC_API_KEY and restart to read your own emails.",
+            "No OpenAI API key is set, so only the sample can run (in replay mode). Set OPENAI_API_KEY in .env and restart to read your own emails.",
         )
     raw: bytes | str = (await eml.read(MAX_UPLOAD + 1)) if eml else text  # type: ignore[assignment]
     if isinstance(raw, bytes) and len(raw) > MAX_UPLOAD:
@@ -117,7 +127,7 @@ async def intake_email(
 def _include_features() -> None:
     import importlib
 
-    for pkg in ("itemcodes", "vendors", "email_rules", "shortlist", "cases"):
+    for pkg in ("itemcodes", "vendors", "email_rules", "shortlist", "cases", "quotes", "chat"):
         try:
             mod = importlib.import_module(f"procurement.{pkg}.api")
         except ModuleNotFoundError as e:
