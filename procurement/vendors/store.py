@@ -91,6 +91,7 @@ class PerformanceIn(BaseModel):
 class Performance(PerformanceIn):
     id: str
     recorded_at: str
+    source: str = ""  # "demo" = made up by scripts/make_demo_vendor_data.py, not real history
 
 
 class VendorFields(BaseModel):
@@ -108,6 +109,8 @@ class VendorFields(BaseModel):
     status: Status | None = None
     notes: str | None = None
     sources: list[str] | None = None
+    credit_days: int | None = Field(None, ge=0, le=365, description="Days of credit the vendor gives on its bills; 0 = no credit (advance or on delivery)")
+    advance_pct: float | None = Field(None, ge=0, le=100, description="Share of the order value asked as advance, %")
 
     @field_validator("name", "contact_person", "email", "phone", "gstin", "city", "notes")
     @classmethod
@@ -158,7 +161,12 @@ class Vendor(BaseModel):
     status: Status = "on list, not vetted"
     notes: str = ""
     sources: list[str] = []
+    credit_days: int | None = None  # None = not known (never treated as 0)
+    advance_pct: float | None = None
     performance: list[Performance] = []
+    # Demo data (scripts/make_demo_vendor_data.py): which fields and categories were made up.
+    demo_fields: list[str] = []
+    demo_categories: list[str] = []
     created_at: str
     updated_at: str
 
@@ -168,19 +176,30 @@ def performance_summary(records: list[Performance] | list[dict]) -> dict:
     recs = [r if isinstance(r, dict) else r.model_dump() for r in records]
     n = len(recs)
     disputes = {k: sum(1 for r in recs if r["disputes"] == k) for k in ("none", "minor", "major")}
+    demo = sum(1 for r in recs if r.get("source") == "demo")
     if not n:
-        return {"count": 0, "quality": None, "delivery": None, "disputes": disputes, "label": "no history"}
+        return {"count": 0, "quality": None, "delivery": None, "disputes": disputes, "demo": 0, "label": "no history"}
     q = round(sum(r["quality"] for r in recs) / n, 1)
     d = round(sum(r["delivery"] for r in recs) / n, 1)
     bits = [f"Quality {q}/5", f"Delivery {d}/5"]
     if disputes["major"] or disputes["minor"]:
         bits.append(", ".join(f"{disputes[k]} {k} dispute{'s' * (disputes[k] != 1)}" for k in ("major", "minor") if disputes[k]))
-    return {"count": n, "quality": q, "delivery": d, "disputes": disputes,
+    return {"count": n, "quality": q, "delivery": d, "disputes": disputes, "demo": demo,
             "label": " · ".join(bits) + f" ({n} record{'s' * (n != 1)})"}
+
+
+def credit_label(credit_days: int | None, advance_pct: float | None) -> str:
+    if credit_days is None:
+        return "not known"
+    out = "advance / on delivery" if credit_days == 0 else f"{credit_days} days credit"
+    if advance_pct:
+        out += f", {advance_pct:g}% advance"
+    return out
 
 
 def public(v: Vendor) -> dict:
     out = v.model_dump(mode="json")
+    out["credit_label"] = credit_label(v.credit_days, v.advance_pct)
     out["performance_summary"] = performance_summary(v.performance)
     out["has_contact"] = bool(v.email or v.phone)
     return out
@@ -252,14 +271,23 @@ def categories() -> list[dict]:
 
 
 # ── Writes ─────────────────────────────────────────────────────────────────────────────────────
+NULLABLE = {"credit_days", "advance_pct"}  # None means "not known", so it's kept as None
+
+
 def _apply(v: Vendor, f: VendorFields) -> None:
     data = f.model_dump(exclude_unset=True)
     for k, val in data.items():
         if k == "name" and not val:
             raise StoreError("A vendor needs a name.")
-        setattr(v, k, val if val is not None else ([] if isinstance(getattr(v, k), list) else ""))
-    # A category to confirm must still be a category.
+        if k in NULLABLE:
+            setattr(v, k, val)
+        else:
+            setattr(v, k, val if val is not None else ([] if isinstance(getattr(v, k), list) else ""))
+    # A person set these, so they're no longer demo values.
+    v.demo_fields = [x for x in v.demo_fields if x not in data]
+    # A category to confirm (or a demo category) must still be a category.
     v.categories_to_confirm = [c for c in v.categories_to_confirm if c in v.categories]
+    v.demo_categories = [c for c in v.demo_categories if c in v.categories]
 
 
 def create(f: VendorFields) -> Vendor:

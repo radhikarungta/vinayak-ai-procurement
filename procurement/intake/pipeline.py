@@ -35,7 +35,7 @@ def run_intake(mail: Email, *, replay: Path | None = None, client=None) -> Intak
     if replay is not None:
         raw_req, mode, model = extract.extract_replay(replay), "replay", None
     else:
-        raw_req, mode, model = extract.extract_live(mail, client=client), "live", extract.MODEL
+        raw_req, mode, model = extract.extract_live(mail, client=client), "live", extract.llm.model()
 
     req, dropped = extract.verify_quotes(raw_req, mail)
 

@@ -1,7 +1,7 @@
 """Build samples/demo_inbox.json: a sample set of received requirement emails for the dashboard.
 
 Each email is a stand-in (anonymised projects, people and vendors). Its extraction is written by
-hand below instead of calling Claude, but everything after that is the real pipeline: quotes are
+hand below instead of calling the model, but everything after that is the real pipeline: quotes are
 verified against the email, the quantity sheet is parsed and the SOP step 02 checks run.
 Run:  uv run python scripts/make_demo_inbox.py
 """

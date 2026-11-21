@@ -4,20 +4,28 @@ A requirement here is a category (e.g. "Waterproofing") and, optionally, the ite
 Candidates are vendors in that category, plus anyone with a past deal on one of the codes.
 Blocked vendors are listed as excluded, with the reason.
 
-Five factors, each scored 0–1 with a one-line reason:
+Seven factors, each scored 0–1 with a one-line reason:
 
-| factor       | weight | data                                   | 1.0 when …              | 0.0 when …            |
-|--------------|--------|----------------------------------------|-------------------------|-----------------------|
-| price        | 0.35   | latest rate per item code vs median    | 20% or more below median| 20% or more above     |
-| performance  | 0.25   | quality + delivery 1–5, disputes       | 5/5, no disputes        | 1/5                   |
-| lead time    | 0.15   | days (actual on orders, else promised) | 7 days or less          | 45 days or more       |
-| response     | 0.15   | hours from RFQ sent to quote           | 24 h or less            | 7 days or more        |
-| experience   | 0.10   | past jobs + projects quoted with us    | 3 or more               | (1 job = 0.6)         |
+| factor       | weight | data                                   | 1.0 when …               | 0.0 when …              |
+|--------------|--------|----------------------------------------|--------------------------|-------------------------|
+| price        | 0.30   | latest rate per item code vs median    | 20% or more below median | 20% or more above       |
+| quality      | 0.20   | quality 1–5 per past job, disputes     | 5/5, no disputes         | 1/5 (major dispute −0.2,|
+|              |        |                                        |                          |  minor −0.05)           |
+| delivery     | 0.15   | on-time delivery 1–5 per past job      | 5/5                      | 1/5                     |
+| credit       | 0.10   | credit days on bills, advance asked    | 60 days or more, no adv. | advance / on delivery   |
+|              |        |                                        |                          |  (each 1% advance −0.01)|
+| lead time    | 0.10   | days (actual on orders, else promised) | 7 days or less           | 45 days or more         |
+| response     | 0.10   | hours from RFQ sent to quote           | 24 h or less             | 7 days or more          |
+| experience   | 0.05   | past jobs + projects quoted with us    | 3 or more                | (1 job = 0.6)           |
 
 The weights are assumptions (SOP 05 only says: float the tender to at least three eligible,
 relevant vendors). A factor with no data is "no data", never 0: it is left out and the other
 weights are re-normalised. Coverage is the share of total weight that had data, so a high score on
 thin data is visible as such.
+
+Values made up by scripts/make_demo_vendor_data.py (deals and performance records with
+source "demo", vendor fields listed in demo_fields) mark their factor `demo`, and the vendor gets
+a note saying so, so demo figures are never mistaken for real history.
 
 Ranking: score (higher first), then coverage, then name. Vendors with the same score and coverage
 share a rank. The top three are pre-ticked (SOP 05: at least three); if a tie straddles third
@@ -34,8 +42,12 @@ from pydantic import BaseModel
 from ..vendors import store as vstore
 from . import deals as dstore
 
-WEIGHTS: dict[str, float] = {"price": 0.35, "performance": 0.25, "lead_time": 0.15, "response": 0.15, "experience": 0.10}
-LABELS = {"price": "Price", "performance": "Past performance", "lead_time": "Lead time", "response": "Response time", "experience": "Experience"}
+# Assumptions, not from the SOP. Must sum to 1.
+WEIGHTS: dict[str, float] = {"price": 0.30, "quality": 0.20, "delivery": 0.15, "credit": 0.10, "lead_time": 0.10,
+                             "response": 0.10, "experience": 0.05}
+LABELS = {"price": "Price", "quality": "Quality", "delivery": "On-time delivery", "credit": "Credit terms",
+          "lead_time": "Lead time", "response": "Response time", "experience": "Experience"}
+DEMO = "demo"  # `source` of made-up deals and performance records
 MIN_RFQ = 3  # SOP 05
 
 
@@ -59,6 +71,7 @@ class Factor(BaseModel):
     weight: float
     score: float | None  # 0–1; None = no data
     reason: str
+    demo: bool = False  # some of the data behind it is demo data
 
 
 class Scored(BaseModel):
@@ -73,6 +86,7 @@ class Scored(BaseModel):
     selected: bool = False
     factors: list[Factor]
     notes: list[str] = []
+    demo: bool = False  # any factor or the category match rests on demo data
 
 
 class Excluded(BaseModel):
@@ -125,6 +139,7 @@ def medians(latest: dict[tuple[str, str], dstore.Deal], codes: list[str]) -> dic
 def price_factor(vendor_id: str, codes: list[str], latest: dict, meds: dict[str, dict]) -> Factor:
     ratios: list[tuple[str, float, float, dict]] = []
     off_unit: list[str] = []
+    demo = False
     for code in codes:
         d = latest.get((vendor_id, code))
         if d is None or code not in meds:
@@ -134,6 +149,7 @@ def price_factor(vendor_id: str, codes: list[str], latest: dict, meds: dict[str,
             off_unit.append(f"{code} quoted per {d.unit}, others per {m['unit']}")
             continue
         ratios.append((code, d.rate / m["median"], d.rate, m))
+        demo |= d.source == DEMO
     w = WEIGHTS["price"]
     if not ratios:
         why = "No rate on these item codes that can be compared with other vendors."
@@ -152,17 +168,46 @@ def price_factor(vendor_id: str, codes: list[str], latest: dict, meds: dict[str,
     why = f"On average {where} {of}."
     if off_unit:
         why += " Not compared: " + "; ".join(off_unit) + "."
-    return Factor(key="price", label=LABELS["price"], weight=w, score=round(score, 3), reason=why)
+    return Factor(key="price", label=LABELS["price"], weight=w, score=round(score, 3), reason=why, demo=demo)
 
 
-def performance_factor(v: vstore.Vendor) -> Factor:
+def _jobs(n: int) -> str:
+    return f"{n} job{'s' * (n != 1)}"
+
+
+def quality_factor(v: vstore.Vendor) -> Factor:
     s = vstore.performance_summary(v.performance)
-    w = WEIGHTS["performance"]
+    w = WEIGHTS["quality"]
     if not s["count"]:
-        return Factor(key="performance", label=LABELS["performance"], weight=w, score=None, reason="No past-performance record yet.")
-    base = ((s["quality"] + s["delivery"]) / 2 - 1) / 4
-    penalty = 0.2 * s["disputes"]["major"] + 0.05 * s["disputes"]["minor"]
-    return Factor(key="performance", label=LABELS["performance"], weight=w, score=round(_clamp(base - penalty), 3), reason=s["label"] + ".")
+        return Factor(key="quality", label=LABELS["quality"], weight=w, score=None, reason="No past-performance record yet.")
+    dis = s["disputes"]
+    penalty = 0.2 * dis["major"] + 0.05 * dis["minor"]
+    why = f"Quality {s['quality']}/5 over {_jobs(s['count'])}"
+    if dis["major"] or dis["minor"]:
+        why += "; " + ", ".join(f"{dis[k]} {k} dispute{'s' * (dis[k] != 1)}" for k in ("major", "minor") if dis[k])
+    return Factor(key="quality", label=LABELS["quality"], weight=w, score=round(_clamp((s["quality"] - 1) / 4 - penalty), 3),
+                  reason=why + ".", demo=bool(s["demo"]))
+
+
+def delivery_factor(v: vstore.Vendor) -> Factor:
+    s = vstore.performance_summary(v.performance)
+    w = WEIGHTS["delivery"]
+    if not s["count"]:
+        return Factor(key="delivery", label=LABELS["delivery"], weight=w, score=None, reason="No past-performance record yet.")
+    return Factor(key="delivery", label=LABELS["delivery"], weight=w, score=round(((s["delivery"] - 1) / 4), 3),
+                  reason=f"On time and as agreed {s['delivery']}/5 over {_jobs(s['count'])}.", demo=bool(s["demo"]))
+
+
+def credit_factor(v: vstore.Vendor) -> Factor:
+    """Credit days on the vendor's bills (60+ = 1, none = 0), less 0.01 per 1% advance asked."""
+    w = WEIGHTS["credit"]
+    if v.credit_days is None:
+        return Factor(key="credit", label=LABELS["credit"], weight=w, score=None, reason="Payment terms not recorded.")
+    adv = v.advance_pct or 0
+    score = _clamp(min(v.credit_days, 60) / 60 - adv / 100)
+    return Factor(key="credit", label=LABELS["credit"], weight=w, score=round(score, 3),
+                  reason=vstore.credit_label(v.credit_days, v.advance_pct).capitalize() + ".",
+                  demo=bool({"credit_days", "advance_pct"} & set(v.demo_fields)))
 
 
 def lead_time_factor(vdeals: list[dstore.Deal]) -> Factor:
@@ -170,13 +215,13 @@ def lead_time_factor(vdeals: list[dstore.Deal]) -> Factor:
     actual = [d.lead_time_days_actual for d in vdeals if d.lead_time_days_actual is not None]
     promised = [d.lead_time_days_promised for d in vdeals if d.lead_time_days_promised is not None]
     if actual:
-        days, what = median(actual), "delivered in"
+        days, what, used = median(actual), "delivered in", [d for d in vdeals if d.lead_time_days_actual is not None]
     elif promised:
-        days, what = median(promised), "promised"
+        days, what, used = median(promised), "promised", [d for d in vdeals if d.lead_time_days_promised is not None]
     else:
         return Factor(key="lead_time", label=LABELS["lead_time"], weight=w, score=None, reason="No lead time stated on any quote or order.")
     return Factor(key="lead_time", label=LABELS["lead_time"], weight=w, score=round(_linear(days, 7, 45), 3),
-                  reason=f"{what.capitalize()} {_num(days)} days (median).")
+                  reason=f"{what.capitalize()} {_num(days)} days (median).", demo=any(d.source == DEMO for d in used))
 
 
 def response_factor(vdeals: list[dstore.Deal]) -> Factor:
@@ -188,14 +233,16 @@ def response_factor(vdeals: list[dstore.Deal]) -> Factor:
     h = median(per_quote.values())
     n = len(per_quote)
     return Factor(key="response", label=LABELS["response"], weight=w, score=round(_linear(h, 24, 168), 3),
-                  reason=f"Quoted {_num(h)} hours after the RFQ ({'median of ' + str(n) + ' quotes' if n > 1 else '1 quote'}).")
+                  reason=f"Quoted {_num(h)} hours after the RFQ ({'median of ' + str(n) + ' quotes' if n > 1 else '1 quote'}).",
+                  demo=any(d.source == DEMO for d in vdeals if d.response_hours is not None))
 
 
 def experience_factor(v: vstore.Vendor, vdeals: list[dstore.Deal], category: str) -> Factor:
     w = WEIGHTS["experience"]
     cat = category.lower()
     jobs = len(v.performance)
-    projects = {d.project.lower() for d in vdeals if d.project and d.category.lower() == cat}
+    cat_deals = [d for d in vdeals if d.project and d.category.lower() == cat]
+    projects = {d.project.lower() for d in cat_deals}
     n = jobs + len(projects)
     if not n:
         return Factor(key="experience", label=LABELS["experience"], weight=w, score=None, reason="No past jobs or quotes with us in this category.")
@@ -204,7 +251,9 @@ def experience_factor(v: vstore.Vendor, vdeals: list[dstore.Deal], category: str
         bits.append(f"{jobs} recorded job{'s' * (jobs != 1)}")
     if projects:
         bits.append(f"quoted on {len(projects)} project{'s' * (len(projects) != 1)}")
-    return Factor(key="experience", label=LABELS["experience"], weight=w, score=round(min(1.0, 0.4 + 0.2 * n), 3), reason=" and ".join(bits).capitalize() + ".")
+    demo = any(r.source == DEMO for r in v.performance) or any(d.source == DEMO for d in cat_deals)
+    return Factor(key="experience", label=LABELS["experience"], weight=w, score=round(min(1.0, 0.4 + 0.2 * n), 3),
+                  reason=" and ".join(bits).capitalize() + ".", demo=demo)
 
 
 def combine(factors: list[Factor]) -> tuple[float | None, float]:
@@ -261,7 +310,9 @@ def shortlist(category: str, item_codes: list[str] | None = None, *, vendors: li
         vdeals = [d for d in relevant if d.vendor_id == v.id]
         factors = [
             price_factor(v.id, codes, latest, meds),
-            performance_factor(v),
+            quality_factor(v),
+            delivery_factor(v),
+            credit_factor(v),
             lead_time_factor(vdeals),
             response_factor(vdeals),
             experience_factor(v, vdeals, category),
@@ -274,10 +325,15 @@ def shortlist(category: str, item_codes: list[str] | None = None, *, vendors: li
             notes.append(f"{category} was guessed from the name; confirm it.")
         if v.status != "approved":
             notes.append(f"Directory status: {v.status}.")
+        demo_cat = in_cat and cat in {c.lower() for c in v.demo_categories}
+        demo = demo_cat or any(f.demo for f in factors)
+        if demo:
+            notes.append("Includes demo data (made up for the demo, not real history)"
+                         + (f"; listed under {category} only for the demo." if demo_cat else "."))
         if not (v.email or v.phone):
             notes.append("No contact details, so an RFQ can't be sent yet.")
         scored.append(Scored(vendor_id=v.id, name=v.name, status=v.status, categories=v.categories,
-                             score=score, coverage=coverage, factors=factors, notes=notes))
+                             score=score, coverage=coverage, factors=factors, notes=notes, demo=demo))
 
     ranked = rank(scored)
     n_sel = sum(s.selected for s in ranked)

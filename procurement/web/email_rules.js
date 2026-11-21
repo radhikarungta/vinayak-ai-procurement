@@ -83,7 +83,7 @@
       '<div style="display:flex;flex-direction:column;gap:18px">' +
       '<section class="panel">' +
       '<div><p class="eyebrow">Email rules</p><h2>Choose which emails get read</h2>' +
-      '<p class="muted small" style="margin-top:4px">Rules run before Claude reads anything, so a skipped email costs nothing.</p></div>' +
+      '<p class="muted small" style="margin-top:4px">Rules run before the model reads anything, so a skipped email costs nothing.</p></div>' +
       '<p class="small" data-r="how"></p>' +
       '<div data-r="list"><p class="muted small">Loading rules…</p></div>' +
       "</section>" +

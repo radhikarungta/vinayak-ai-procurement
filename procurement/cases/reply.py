@@ -8,11 +8,13 @@ REPLY_ALLOWED_TO (addresses or @domains). Otherwise the reply can only be copied
 
 from __future__ import annotations
 
+import mimetypes
 import os
 import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import parseaddr
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -135,8 +137,10 @@ def can_send() -> dict:
     return {"smtp": smtp, "allowed_to": allowed_to()}
 
 
-def deliver(to: str, subject: str, body: str, *, mark_only: bool = False, smtp_factory=smtplib.SMTP_SSL) -> tuple[str, str]:
-    """Send one email to a test inbox (or only check it, with mark_only). Returns (address, via)."""
+def deliver(to: str, subject: str, body: str, *, mark_only: bool = False, smtp_factory=smtplib.SMTP_SSL,
+            attachments: list[Path] = ()) -> tuple[str, str]:
+    """Send one email (with any attached files) to a test inbox, or only check it, with mark_only.
+    Returns (address, via)."""
     addr = parseaddr(to)[1]
     if not addr or "@" not in addr:
         raise SendError("Give one email address to send to.")
@@ -154,6 +158,9 @@ def deliver(to: str, subject: str, body: str, *, mark_only: bool = False, smtp_f
     msg = EmailMessage()
     msg["From"], msg["To"], msg["Subject"] = user, addr, subject
     msg.set_content(body)
+    for p in attachments:
+        kind = (mimetypes.guess_type(p.name)[0] or "application/octet-stream").split("/", 1)
+        msg.add_attachment(p.read_bytes(), maintype=kind[0], subtype=kind[1], filename=p.name)
     try:
         with smtp_factory(os.environ.get("SMTP_HOST", "smtp.gmail.com"), int(os.environ.get("SMTP_PORT", "465")), timeout=30) as s:
             s.login(user, pw.replace(" ", ""))
@@ -163,11 +170,15 @@ def deliver(to: str, subject: str, body: str, *, mark_only: bool = False, smtp_f
     return addr, "smtp"
 
 
-def send(uid: str, to: str, subject: str, body: str, *, mark_only: bool = False, smtp_factory=smtplib.SMTP_SSL) -> F.SentReply:
-    """The reply to the site, sent (test inboxes only) or marked as sent, and recorded on the case."""
+def send(uid: str, to: str, subject: str, body: str, *, mark_only: bool = False, smtp_factory=smtplib.SMTP_SSL,
+         case: F.Case | None = None) -> F.SentReply:
+    """The reply to the site, sent (test inboxes only) or marked as sent, and recorded on the case
+    with what it asked (so a question added later shows the case needs another reply)."""
+    case = case or F.build_case(uid)
     addr, via = deliver(to, subject, body, mark_only=mark_only, smtp_factory=smtp_factory)
-    sent = F.SentReply(to=addr, subject=subject, body=body, at=F.now(), via=via)
+    sent = F.SentReply(to=addr, subject=subject, body=body, at=F.now(), via=via, asked=F.asked_ids(case))
     state = F.load_state(uid)
     state.setdefault("replies", []).append(sent.model_dump())
+    state.pop("redecided", None)
     F.save_state(uid, state)
     return sent

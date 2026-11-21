@@ -99,7 +99,7 @@ def test_quote_spanning_quoted_line_break_is_found(mail):
 class FakeClient:
     def __init__(self, response):
         self.calls = []
-        self.beta = SimpleNamespace(messages=SimpleNamespace(parse=self._parse))
+        self.responses = SimpleNamespace(parse=self._parse)
         self._response = response
 
     def _parse(self, **kwargs):
@@ -108,20 +108,53 @@ class FakeClient:
 
 
 def test_live_extraction_request_shape(mail, reference):
-    client = FakeClient(SimpleNamespace(stop_reason="end_turn", parsed_output=reference))
+    client = FakeClient(SimpleNamespace(status="completed", output=[], output_parsed=reference))
     result = run_intake(mail, client=client)
     call = client.calls[0]
-    assert call["model"] == extract.MODEL
-    assert call["output_format"] is ExtractedRequirement
-    assert call["fallbacks"] == "default"
-    assert "T2_waterproofing_quantities.xlsx" in call["messages"][0]["content"]
-    assert result.extraction_mode == "live"
+    assert call["model"] == extract.llm.model()
+    assert call["text_format"] is ExtractedRequirement
+    assert call["store"] is False
+    assert call["instructions"] == extract.SYSTEM
+    assert "T2_waterproofing_quantities.xlsx" in call["input"][0]["content"]
+    assert result.extraction_mode == "live" and result.model == extract.llm.model()
 
 
 def test_refusal_raises(mail):
-    client = FakeClient(SimpleNamespace(stop_reason="refusal", parsed_output=None))
+    refusal = SimpleNamespace(type="message", content=[SimpleNamespace(type="refusal", refusal="no")])
+    client = FakeClient(SimpleNamespace(status="completed", output=[refusal], output_parsed=None))
     with pytest.raises(extract.IntakeError, match="declined"):
         run_intake(mail, client=client)
+
+
+def test_cut_short_answer_raises(mail):
+    client = FakeClient(SimpleNamespace(status="incomplete", output=[], output_parsed=None))
+    with pytest.raises(extract.IntakeError, match="ran out of room"):
+        run_intake(mail, client=client)
+
+
+def test_api_errors_are_readable(mail):
+    import httpx2
+    import openai
+
+    def boom(**_):
+        raise openai.APIConnectionError(request=httpx2.Request("POST", "https://api.openai.com/v1/responses"))
+
+    client = SimpleNamespace(responses=SimpleNamespace(parse=boom))
+    with pytest.raises(extract.IntakeError, match="Couldn't reach the OpenAI API"):
+        run_intake(mail, client=client)
+
+
+def test_live_whenever_openai_key_is_set(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.delenv("INTAKE_REPLAY", raising=False)
+    assert extract.has_credentials()
+    s = TestClient(api.app).get("/api/status").json()
+    assert s == {"live": True, "model": extract.llm.model(), "label": f"Live · {extract.llm.model()}"}
+
+
+def test_status_without_key(monkeypatch):
+    s = TestClient(api.app).get("/api/status").json()
+    assert s["live"] is False and s["label"] == "Replay mode · no OPENAI_API_KEY"
 
 
 # ── checks ─────────────────────────────────────────────────────────────────────────────────────
@@ -159,9 +192,16 @@ def test_api_upload_without_key_says_why(monkeypatch):
     monkeypatch.setattr(extract, "has_credentials", lambda: False)
     r = TestClient(api.app).post("/api/intake/email", data={"text": "SUBJECT: x\n\nNeed cement"})
     assert r.status_code == 503
-    assert "ANTHROPIC_API_KEY" in r.json()["detail"]
+    assert "OPENAI_API_KEY" in r.json()["detail"]
 
 
 def test_api_rejects_empty_request():
     r = TestClient(api.app).post("/api/intake/email", data={"text": "  "})
     assert r.status_code == 400
+
+
+def test_saved_model_is_read_at_call_time(mail, reference, monkeypatch):
+    monkeypatch.setenv("OPENAI_MODEL", "late-set-model")
+    client = FakeClient(SimpleNamespace(status="completed", output=[], output_parsed=reference))
+    result = run_intake(mail, client=client)
+    assert client.calls[0]["model"] == "late-set-model" and result.model == "late-set-model"

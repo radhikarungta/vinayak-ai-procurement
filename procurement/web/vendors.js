@@ -10,6 +10,11 @@
   const statusTone = s => s === "approved" ? "good" : s === "blocked" ? "bad" : "warn";
   const list = s => String(s || "").split(",").map(x => x.trim()).filter(Boolean);
   const today = () => new Date().toISOString().slice(0, 10);
+  // Values made up by scripts/make_demo_vendor_data.py. Same tone as the page's "Demo data" chip.
+  const DEMO = `<span class="chip warn" title="Made up for the demo, not real history. Remove with scripts/make_demo_vendor_data.py --remove">demo</span>`;
+  const creditDemo = v => (v.demo_fields || []).some(k => k === "credit_days" || k === "advance_pct");
+  const creditCell = v => v.credit_days == null ? `<span class="muted">Not known</span>` : `${esc(v.credit_label)}${creditDemo(v) ? " " + DEMO : ""}`;
+  const numOrNull = x => { const t = String(x ?? "").trim(); return t === "" ? null : Number(t); };
 
   function injectStyle() {
     if (document.getElementById("vd-style")) return;
@@ -43,16 +48,18 @@
   }
 
   function catChips(v) {
-    const conf = new Set(v.categories_to_confirm || []);
+    const conf = new Set(v.categories_to_confirm || []), demo = new Set(v.demo_categories || []);
     if (!v.categories.length) return `<span class="muted small">No category</span>`;
-    return `<span class="chips">${v.categories.map(c => conf.has(c)
+    return `<span class="chips">${v.categories.map(c => demo.has(c)
+      ? `<span class="chip warn" title="Category added for the demo only.">${esc(c)} · demo</span>`
+      : conf.has(c)
       ? `<span class="chip warn" title="Guessed from the name. Please confirm.">${esc(c)} · to confirm</span>`
       : `<span class="chip acc">${esc(c)}</span>`).join("")}</span>`;
   }
 
   function perfCell(p) {
     if (!p.count) return `<span class="muted">No history</span>`;
-    return `<span class="mono">Q ${esc(p.quality)} · D ${esc(p.delivery)}</span> <span class="muted small">(${esc(p.count)})</span>${p.disputes.major ? ` <span class="chip bad">${esc(p.disputes.major)} major</span>` : ""}`;
+    return `<span class="mono">Q ${esc(p.quality)} · D ${esc(p.delivery)}</span> <span class="muted small">(${esc(p.count)})</span>${p.disputes.major ? ` <span class="chip bad">${esc(p.disputes.major)} major</span>` : ""}${p.demo ? " " + DEMO : ""}`;
   }
 
   window.mountVendors = function mountVendors(el) {
@@ -103,12 +110,13 @@
         return;
       }
       slot("table").innerHTML = `<p class="muted small" style="margin-bottom:8px">${esc(state.items.length)} vendor${state.items.length === 1 ? "" : "s"}</p>
-      <div class="tbl"><table><thead><tr><th>Name</th><th>Categories</th><th>Status</th><th>Contact</th><th>Past performance</th></tr></thead><tbody>
+      <div class="tbl"><table><thead><tr><th>Name</th><th>Categories</th><th>Status</th><th>Contact</th><th>Credit terms</th><th>Past performance</th></tr></thead><tbody>
       ${state.items.map(v => `<tr class="row" tabindex="0" data-id="${esc(v.id)}"${state.selected && state.selected.id === v.id ? ' aria-current="true"' : ""}>
         <td><b>${esc(v.name)}</b>${v.city ? `<div class="muted small">${esc(v.city)}</div>` : ""}</td>
         <td>${catChips(v)}</td>
         <td><span class="chip ${statusTone(v.status)}">${esc(v.status)}</span></td>
         <td class="small">${v.has_contact ? esc([v.contact_person, v.phone, v.email].filter(Boolean).join(" · ")) : `<span class="muted">None yet</span>`}</td>
+        <td class="small">${creditCell(v)}</td>
         <td class="small">${perfCell(v.performance_summary)}</td></tr>`).join("")}
       </tbody></table></div>`;
     }
@@ -129,6 +137,8 @@
           ${inp("gstin", "GSTIN", v.gstin || "", 'placeholder="15 characters, e.g. 19ABCDE1234F1Z5" maxlength="15"')}
           ${inp("city", "City", v.city || "")}
           ${inp("sources", "Where we know them from", (v.sources || []).join(", "))}
+          ${inp("credit_days", "Credit on bills, days (0 = advance / on delivery; blank = not known)", v.credit_days ?? "", 'type="number" min="0" max="365" step="1"')}
+          ${inp("advance_pct", "Advance asked, % of order (blank = not known)", v.advance_pct ?? "", 'type="number" min="0" max="100" step="any"')}
         </div>
         <div class="f"><label for="vd-f-notes">Notes</label><textarea class="short" id="vd-f-notes" name="notes">${esc(v.notes || "")}</textarea></div>
         ${(v.categories_to_confirm || []).length ? `<p class="small muted">Still to confirm: ${esc(v.categories_to_confirm.join(", "))}. Saving keeps them marked; use "Confirm" on the vendor page to clear the mark.</p>` : ""}
@@ -161,16 +171,17 @@
             <dt>GSTIN</dt><dd>${v.gstin ? `<span class="mono">${esc(v.gstin)}</span>` : dd("")}</dd>
             <dt>City</dt><dd>${dd(v.city)}</dd>
             <dt>Projects</dt><dd>${dd(v.projects.join(", "), "None")}</dd>
+            <dt>Credit terms</dt><dd>${creditCell(v)}</dd>
             <dt>Known from</dt><dd>${v.sources.length ? `<ul class="plain">${v.sources.map(s => `<li>${esc(s)}</li>`).join("")}</ul>` : dd("")}</dd>
             ${v.notes ? `<dt>Notes</dt><dd>${esc(v.notes)}</dd>` : ""}
           </dl>
           <div style="display:flex;flex-direction:column;gap:10px">
             <h3>Past performance</h3>
-            <p>${p.count ? esc(p.label) : `<span class="muted">No history yet. This vendor isn't scored until someone records a job.</span>`}</p>
+            <p>${p.count ? esc(p.label) : `<span class="muted">No history yet. This vendor isn't scored until someone records a job.</span>`}${p.demo ? ` ${DEMO} <span class="small muted">${esc(p.demo)} of ${esc(p.count)} records are demo data.</span>` : ""}</p>
             ${p.count ? `<div class="tbl"><table><thead><tr><th>Date</th><th>Project · work</th><th class="n">Quality</th><th class="n">Delivery</th><th>Disputes</th></tr></thead><tbody>
               ${v.performance.map(r => `<tr><td class="mono">${esc(r.date)}</td><td>${esc(r.project)} · ${esc(r.work)}${r.note ? `<div class="muted small">${esc(r.note)}</div>` : ""}<div class="muted small">By ${esc(r.recorded_by)}</div></td>
                 <td class="n">${esc(r.quality)}/5</td><td class="n">${esc(r.delivery)}/5</td>
-                <td><span class="chip ${r.disputes === "none" ? "" : r.disputes === "minor" ? "warn" : "bad"}">${esc(r.disputes)}</span></td></tr>`).join("")}
+                <td><span class="chip ${r.disputes === "none" ? "" : r.disputes === "minor" ? "warn" : "bad"}">${esc(r.disputes)}</span>${r.source === "demo" ? " " + DEMO : ""}</td></tr>`).join("")}
             </tbody></table></div>` : ""}
             <form data-form="perf" class="panel" style="background:var(--sunk)" novalidate>
               <h3>Add a record</h3>
@@ -249,6 +260,13 @@
         const body = {};
         for (const k of ["name", "status", "contact_person", "phone", "email", "gstin", "city", "notes"]) body[k] = String(fd.get(k) || "").trim();
         for (const k of ["categories", "projects", "sources"]) body[k] = list(fd.get(k));
+        // Send credit terms only when changed, so saving other fields keeps them (and their demo tag) as they are.
+        const was = state.mode === "edit" && state.selected ? state.selected : {};
+        for (const k of ["credit_days", "advance_pct"]) {
+          const x = numOrNull(fd.get(k));
+          if (x !== null && !Number.isFinite(x)) { state.error = "Credit days and advance % must be numbers."; return draw(); }
+          if (x !== (was[k] ?? null)) body[k] = x;
+        }
         state.draft = body;
         if (!body.name) { state.error = "A vendor needs a name."; return draw(); }
         const editing = state.mode === "edit" && state.selected;

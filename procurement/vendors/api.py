@@ -40,10 +40,13 @@ def summary() -> dict:
     with_contact = sum(1 for v in vs if v.email or v.phone)
     with_history = sum(1 for v in vs if v.performance)
     approved = sum(1 for v in vs if v.status == "approved")
+    demo = sum(1 for v in vs if v.demo_fields or v.demo_categories or any(r.source == "demo" for r in v.performance))
     if not n:
         headline = "No vendors yet. Run the seed or add one by hand."
     else:
         headline = f"{n} vendors. {with_cat} have a category, {with_contact} have contact details, {with_history} have a past-performance record."
+        if demo:
+            headline += f" {demo} carry demo data (made up for the demo, not real history)."
     tone = lambda k: None if not n else ("good" if k == n else "warn" if k else "bad")  # noqa: E731
     return {
         "title": "Vendor directory",
@@ -56,6 +59,7 @@ def summary() -> dict:
             {"label": "With contact details", "value": with_contact, "tone": tone(with_contact)},
             # Missing history is a gap to fill, not a failing, so it's never "bad".
             {"label": "With past performance", "value": with_history, "tone": ("good" if with_history == n else "warn") if n else None},
+            *([{"label": "With demo data", "value": demo, "tone": "warn"}] if demo else []),
         ],
         # Ready to draft RFQs: someone in a category, and someone we can actually reach.
         "ready": n > 0 and with_cat > 0 and with_contact > 0,

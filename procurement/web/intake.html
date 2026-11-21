@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script>try{const t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
 /* Same tokens as the six-step demo (index.html at the repo root) */
 :root{
@@ -15,10 +16,15 @@
   --good:#1f7a43; --good-soft:#dcf1e3; --warn:#9a5b00; --warn-soft:#fbecd2; --bad:#b3261e; --bad-soft:#f9dedc;
   --display:"Archivo",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
-@media (prefers-color-scheme: dark){:root{
+:root[data-theme=dark]{
+  --bg:#0f171c; --surface:#16222a; --sunk:#1d2b34; --line:#2c3d47; --fg:#e3eaee; --muted:#93a5af;
+  --accent:#4fb8c4; --accent-soft:#163d43; --on-accent:#0b1a1e;
+  --good:#6dcf93; --good-soft:#163524; --warn:#f0b45a; --warn-soft:#3a2a10; --bad:#f28b82; --bad-soft:#3d1c1a; color-scheme:dark}
+@media (prefers-color-scheme: dark){:root:not([data-theme=light]){
   --bg:#0f171c; --surface:#16222a; --sunk:#1d2b34; --line:#2c3d47; --fg:#e3eaee; --muted:#93a5af;
   --accent:#4fb8c4; --accent-soft:#163d43; --on-accent:#0b1a1e;
   --good:#6dcf93; --good-soft:#163524; --warn:#f0b45a; --warn-soft:#3a2a10; --bad:#f28b82; --bad-soft:#3d1c1a; color-scheme:dark}}
+.theme-toggle{font:inherit;cursor:pointer;background:none}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body)}
@@ -35,6 +41,7 @@ p{margin:0}
 .brand .mark{width:34px;height:34px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:800 1.05rem var(--display);flex:none}
 .brand b{display:block;font:800 1.05rem/1.2 var(--display)} .brand span{display:block;font-size:.78rem;color:var(--muted)}
 .status{display:flex;gap:8px;flex-wrap:wrap} .status .chip{cursor:default}
+.status a.chip{cursor:pointer;color:inherit;text-decoration:none} .status a.chip:hover{background:var(--line)}
 .pagehead{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
 .pagehead p{color:var(--muted);margin-top:4px;max-width:72ch;font-size:.92rem}
 .chip{display:inline-flex;gap:6px;align-items:center;font-size:.78rem;padding:3px 10px;border-radius:999px;background:var(--sunk);white-space:nowrap}
@@ -134,8 +141,10 @@ tr.row{cursor:pointer} tr.row:hover td{background:var(--accent-soft)} tr.row:foc
       <div><b>Vinayak Procurement</b><span>Site requirement to vendor comparative</span></div>
     </div>
     <div class="status">
-      <span class="chip warn" title="The Gmail connection is built (procurement/mailbox.py) but not switched on yet. It needs a dedicated intake mailbox, an app password and an Anthropic API key. Until then the app shows anonymised sample emails run through the real pipeline from hand-written extractions.">Demo data</span>
+      <span class="chip warn" title="The Gmail connection is built (procurement/mailbox.py) but not switched on yet. It needs a dedicated intake mailbox, an app password and an OpenAI API key. Until then the app shows anonymised sample emails run through the real pipeline from hand-written extractions.">Demo data</span>
       <span class="chip" id="mode">Checking…</span>
+      <button type="button" class="chip theme-toggle" id="theme-toggle" aria-label="Switch light or dark mode"></button>
+      <a class="chip" href="/demo" title="Hand-typed walkthrough of steps 4–6 (quotes, comparative statement, HOD note)">Steps 4–6 demo ↗</a>
     </div>
   </div>
   <nav class="tabs bar" role="tablist" id="main-nav">
@@ -177,12 +186,12 @@ tr.row{cursor:pointer} tr.row:hover td{background:var(--accent-soft)} tr.row:foc
       <div class="eyebrow">Or one email by hand</div>
       <button type="button" class="btn" id="sample">Run the sample (Riverside, Tower-2)</button>
       <div class="or">or your own</div>
-      <label for="eml">Email file (.eml, attachments included)</label>
-      <input type="file" id="eml" accept=".eml,message/rfc822">
+      <label for="eml">Email file (.eml with its attachments, or a .txt of the email)</label>
+      <input type="file" id="eml" accept=".eml,.txt,message/rfc822,text/plain">
       <div class="or">or paste</div>
       <label for="text">Email text</label>
       <textarea id="text" placeholder="SUBJECT: …&#10;FROM: …&#10;&#10;Dear Sir, please find attached…"></textarea>
-      <label for="att">Attachments for pasted text (quantity sheet .xlsx)</label>
+      <label for="att">Attachments for pasted text or a .txt (quantity sheet .xlsx)</label>
       <input type="file" id="att" multiple accept=".xlsx,.xlsm">
       <button type="submit" class="btn primary" id="go">Read this email</button>
       <p class="small muted" id="hint"></p>
@@ -204,8 +213,8 @@ let live = false;
 fetch("/api/status").then(r => r.json()).then(s => {
   live = s.live;
   $("#mode").className = "chip " + (live ? "good" : "warn");
-  $("#mode").textContent = live ? `Live · ${s.model}` : "Replay mode · no API key";
-  $("#hint").textContent = live ? "" : "No API key is set, so only the sample runs, using a saved reference extraction. Set ANTHROPIC_API_KEY and restart to read your own emails.";
+  $("#mode").textContent = s.label || (live ? `Live · ${s.model}` : "Replay mode · no OPENAI_API_KEY");
+  $("#hint").textContent = live ? "" : "No API key is set, so only the sample runs, using a saved reference extraction. Set OPENAI_API_KEY in .env and restart to read your own emails.";
   $("#go").disabled = !live;
 }).catch(() => { $("#mode").textContent = "Server not reachable"; });
 
@@ -395,7 +404,7 @@ const PIPELINE = [
       {label: "Projects", value: new Set(DEMO.map(d => d.result.requirement.project.value)).size}]}; }},
   {n: 2, title: "Match item codes", what: "Map each line to an ERP code, suggest new ones, flag duplicates.", tab: "itemcodes", summary: "/api/itemcodes/summary"},
   {n: 3, title: "Shortlist vendors & draft RFQs", what: "Score vendors on price, past deals, lead time and response time, then pick who gets the RFQ. Test inboxes only.", tab: "shortlist", summary: "/api/shortlist/summary"},
-  {n: 4, title: "Read & normalise quotes", what: "Rates, GST, freight, payment terms and delivery from any format."},
+  {n: 4, title: "Read & normalise quotes", what: "Rates, GST, freight, payment terms and delivery from any format.", summary: "/api/quotes/summary"},
   {n: 5, title: "Comparative statement", what: "Rank vendors on price and past performance, with the reason."},
   {n: 6, title: "Recommend to HOD", what: "A note with its reasoning. The HOD decides."},
 ];
@@ -511,6 +520,18 @@ function route() {
   else showTab("overview");
 }
 window.addEventListener("hashchange", route);
+</script>
+<div id="ask-root"></div>
+<script src="/web/chat.js" defer></script>
+<script>
+(() => {
+  const b = document.getElementById("theme-toggle"), root = document.documentElement;
+  const dark = () => (root.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+  const draw = () => { b.textContent = dark() ? "☀ Light" : "☾ Dark"; b.title = dark() ? "Switch to light mode" : "Switch to dark mode"; };
+  b.onclick = () => { const t = dark() ? "light" : "dark"; root.dataset.theme = t; try { localStorage.setItem("theme", t); } catch (e) {} draw(); };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  draw();
+})();
 </script>
 </body>
 </html>
