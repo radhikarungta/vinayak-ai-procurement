@@ -159,5 +159,7 @@ def send(uid: str, vendor_id: str, to: str, subject: str, body: str, *, category
                      attached=[p.name for p in files] if via == "smtp" else [])
     state = F.load_state(uid)
     state["rfqs"] = [r for r in state.get("rfqs", []) if (r["vendor_id"], r["category"]) != (vendor_id, d.category)] + [sent.model_dump()]
+    F.log_event(state, "rfq", f"RFQ for {d.category} {'sent' if via == 'smtp' else 'marked as sent'} to {d.vendor} ({addr}).",
+                vendor_id=vendor_id, category=d.category)
     F.save_state(uid, state)
     return sent

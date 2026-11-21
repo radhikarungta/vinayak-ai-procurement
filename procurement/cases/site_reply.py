@@ -6,6 +6,9 @@ How a reply finds its case (procurement/mailbox.sync calls `match_case` before i
    address we sent it to. Both must hold, so a new requirement with a similar subject is not swallowed.
 A matched email is kept on the case (state["site_replies"]) and never becomes a new requirement.
 
+On a demo case, `simulate` writes the answer a site engineer would plausibly send to the questions we
+asked (template text, no model), so the round trip can be shown without a real site inbox.
+
 A reply can also be pasted in by hand (an answer that came by phone or WhatsApp, or a demo case).
 
 Reading it: the model gets the questions we asked (undecided lines with their code options, open email
@@ -60,7 +63,7 @@ class SiteReply(BaseModel):
     sender: str | None
     subject: str | None
     body: str  # the site's new text (the quoted earlier mail cut off)
-    via: Literal["email", "pasted"]
+    via: Literal["email", "pasted", "simulated"]
     message_id: str | None = None
     read: Literal["read", "needs_key", "failed", "nothing_asked"] = "needs_key"
     error: str | None = None
@@ -246,17 +249,24 @@ def read(case: F.Case, text: str, *, client: Any = None, master: M.Master | None
 
 
 def record(uid: str, body: str, *, sender: str | None = None, subject: str | None = None, via: str = "pasted",
-           message_id: str | None = None, at: str | None = None, client: Any = None, master: M.Master | None = None) -> SiteReply:
+           message_id: str | None = None, at: str | None = None, client: Any = None, master: M.Master | None = None,
+           fallback: list[Suggestion] | None = None) -> SiteReply:
     m = master or M.get_master()
     case = F.build_case(uid, master=m)
     text = new_text(body)
     if not own_words(text):
         raise F.CaseError("The reply is empty.")
     status, err, sugg = read(case, text, client=client, master=m)
+    if fallback is not None and status in ("needs_key", "failed"):  # simulated: we know what it says
+        status, err, sugg = "read", f"Read without the model ({err.split(':')[0] if err else 'no key'}): the demo answer's own mapping.", fallback
     r = SiteReply(at=at or F.now(), sender=sender, subject=subject, body=text[:20000], via=via, message_id=message_id,
                   read=status, error=err, suggestions=sugg)
     state = F.load_state(uid)
     state.setdefault("site_replies", []).append(r.model_dump())
+    usable = sum(s.action != "unclear" for s in sugg)
+    F.log_event(state, "site_reply", f"The site answered ({ {'email': 'by email', 'pasted': 'pasted in', 'simulated': 'simulated'}[via] }): "
+                f"{usable} of {len(sugg)} question{'s' * (len(sugg) != 1)} answered clearly." if status == "read" else
+                f"The site answered ({via}); not read yet: {err or status}.", actor="site")
     F.save_state(uid, state)
     return r
 
@@ -275,3 +285,85 @@ def reread(uid: str, index: int, *, client: Any = None, master: M.Master | None 
     state["site_replies"][index] = r.model_dump()
     F.save_state(uid, state)
     return r
+
+
+# ── Demo: the site's answer, simulated ─────────────────────────────────────────────────────────
+
+
+def _num(x: float) -> str:
+    return f"{x:,.2f}".rstrip("0").rstrip(".")
+
+
+FACTS = {"finish date": "Finish date is 15 Dec 2026", "start date": "Work starts 1 Dec 2026",
+         "delivery": "Deliver to the site store, Gate 2", "quantity": "Quantities are in the attached sheet"}
+
+
+def _check_answer(c: dict) -> str:
+    """The missing fact the check asks for, stated plainly (demo)."""
+    text = f"{c.get('title', '')} {c.get('detail', '')}".lower()
+    if "sheet" in text or "attach" in text:
+        return "Resending the quantity sheet as .xlsx with this mail."
+    m = re.search(r"not stated:\s*([^.]+)", text)
+    asked = [a.strip() for a in re.split(r",|\band\b", m.group(1))] if m else []
+    facts = [FACTS.get(a, f"{a.capitalize()}: as per the drawing") for a in asked if a]
+    return (". ".join(facts) + ".") if facts else f"Noted on \"{c.get('title', '').lower()}\": details as in the sheet."
+
+
+def simulated_answer(case: F.Case) -> tuple[str, list[Suggestion]]:
+    """A plausible answer from the site to every open question, and what it means (used when no model
+    is set). Partial matches are split 60/40, a conflict takes the code the line names, an unmatched line
+    gets the suggested new code, and each email problem gets the missing fact."""
+    lines, checks = questions(case)
+    out = ["Hi,", "", "Answers to your points:", ""]
+    sugg: list[Suggestion] = []
+    n = 0
+    for ln in lines:
+        n += 1
+        m, kinds = ln.match, [i.kind for i in ln.issues]
+        uom = f" {ln.uom.lower()}" if ln.uom else ""
+        if "partial" in kinds and m.code and m.also and "conflict" not in kinds:
+            codes = [m.code, *m.also]
+            if ln.quantity:
+                a = round(ln.quantity * 0.6)
+                said = f"It's both. {_num(a)}{uom} under {codes[0]} and {_num(ln.quantity - a)}{uom} under {', '.join(codes[1:])}."
+            else:
+                said = f"It's both, take it under {' and '.join(codes)}."
+            sugg.append(Suggestion(ref=ln.id, action="use_code", codes=codes, quote=said, note=said))
+        elif m.code and ("conflict" in kinds or "partial" in kinds):
+            said = f"Use {m.code} ({(m.erp_text or '').lower()}), that's what we meant."
+            sugg.append(Suggestion(ref=ln.id, action="use_code", codes=[m.code], quote=said, note=""))
+        elif m.suggestion:
+            said = f"There's no code for it yet; the specification is as written in the sheet. Please open new code {m.suggestion.code}."
+            sugg.append(Suggestion(ref=ln.id, action="use_code", codes=[m.suggestion.code], quote=f"Please open new code {m.suggestion.code}.",
+                                   note=f"New code {m.suggestion.code}: {ln.text}"))
+        elif m.candidates:
+            c = m.candidates[0]
+            said = f"Go with {c.code} ({c.text.lower()})."
+            sugg.append(Suggestion(ref=ln.id, action="use_code", codes=[c.code], quote=said, note=""))
+        else:
+            said = "Leave this one out, we'll buy it locally."
+            sugg.append(Suggestion(ref=ln.id, action="skip", quote=said, note="Bought locally by the site."))
+        out += [f"{n}. {ln.text}: {said}", ""]
+    for c in checks:
+        n += 1
+        said = _check_answer(c)
+        sugg.append(Suggestion(ref=f"check:{c['id']}", action="resolved", quote=said, note=said))
+        out += [f"{n}. {c['title']}: {said}", ""]
+    out += ["Thanks,", "Site QS"]
+    return "\n".join(out), sugg
+
+
+def simulate(uid: str, *, client: Any = None, master: M.Master | None = None) -> SiteReply:
+    """Demo only: the site's answer to our last reply arrives (read by the model when a key is set)."""
+    if not uid.isdigit():
+        raise F.CaseError("The simulated answer is for demo emails only. Real answers come in by email.")
+    m = master or M.get_master()
+    case = F.build_case(uid, master=m)
+    if not case.replies:
+        raise F.CaseError("Send (or mark as sent) the reply to the site first.")
+    if not any(questions(case)):
+        raise F.CaseError("Nothing is open to answer.")
+    body, sugg = simulated_answer(case)
+    last = case.replies[-1]
+    return record(uid, body, sender=case.sender, subject=last.subject if last.subject.lower().startswith("re:") else f"Re: {last.subject}",
+                  via="simulated", client=client, master=m, fallback=sugg)

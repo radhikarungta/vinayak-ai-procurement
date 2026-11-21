@@ -24,6 +24,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -147,7 +150,7 @@ def _withdraw(state: dict) -> None:
     state.pop("vendor_picks", None)
     state.pop("rfq_items", None)
     state.setdefault("rfq_history", []).extend(state.pop("rfqs", []))  # sent under an earlier approval
-    for k in ("quote_uploads", "pack_links", "manual_rates", "compare", "award"):  # the quotes answered those RFQs
+    for k in ("quote_uploads", "pack_links", "manual_rates", "sim_quotes", "compare", "award"):  # the quotes answered those RFQs
         if state.get(k):
             state.setdefault("quotes_history", []).append({k: state[k], "at": now()})
         state.pop(k, None)
@@ -162,10 +165,41 @@ def all_states() -> list[tuple[str, dict]]:
     return [(p.stem, json.loads(p.read_text())) for p in sorted(d.glob("*.json"))] if d.exists() else []
 
 
+# ── The activity log: every change, who made it and when ───────────────────────────────────────
+
+# Changes are made by request handlers and by the agent's background thread: each change (load, modify,
+# save) runs under this lock (cases/api.py _do, and each agent move), and files are replaced atomically
+# so a poll never reads half a file.
+STATE_LOCK = threading.RLock()
+
+Actor = Literal["person", "agent", "site", "vendor", "system"]
+_ACTOR: ContextVar[str] = ContextVar("actor", default="person")
+
+
+@contextmanager
+def acting_as(actor: str):
+    """Changes made inside are logged as made by `actor` (the agent runs its steps inside this)."""
+    tok = _ACTOR.set(actor)
+    try:
+        yield
+    finally:
+        _ACTOR.reset(tok)
+
+
+def log_event(state: dict, kind: str, text: str, *, actor: str | None = None, **detail) -> None:
+    """Add one line to the case's activity log (saved with the state)."""
+    ev = {"at": now(), "actor": actor or _ACTOR.get(), "kind": kind, "text": text}
+    if detail:
+        ev["detail"] = detail
+    state.setdefault("events", []).append(ev)
+
+
 def save_state(uid: str, state: dict) -> None:
     p = _store_path(uid)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(state, indent=2))
+    tmp = p.with_name(f".{p.name}.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    os.replace(tmp, p)
 
 
 def now() -> str:
@@ -182,6 +216,10 @@ def records() -> list[dict]:
     if p.exists():
         for r in json.loads(p.read_text()):
             out[str(r["uid"])] = r
+    from . import arrivals  # noqa: PLC0415 - demo emails that "landed" later (arrivals imports this module)
+
+    for r in arrivals.records():
+        out[str(r["uid"])] = r
     for uid in mailbox.saved_uids():
         r = mailbox.load_result(uid)
         if r and r.get("status") == "read" and r.get("result"):
@@ -369,6 +407,11 @@ def decide(uid: str, line_id: str, action: str, codes: list[str] | None = None, 
             if unknown:
                 raise CaseError(f"Not an ERP code or a suggested new code: {', '.join(unknown)}.")
         state["decisions"][line_id] = Decision(action=action, codes=codes if action == "use_code" else [], note=note, at=now()).model_dump()
+    what = {"use_code": f"Item code {' + '.join(codes or [])} for", "skip": "Left out", "ask_site": "To ask the site about",
+            "clear": "Undid the decision on"}[action]
+    log_event(state, "item_code", f"{what} \"{line.text}\"" + (f" ({note})" if note else ""), line=line_id)
+    if state.get("approved_at"):
+        log_event(state, "withdrawn", "Items changed: the approval and everything after it were withdrawn.", actor="system")
     _withdraw(state)
     save_state(uid, state)
     return build_case(uid, master=m)
@@ -383,6 +426,8 @@ def resolve_check(uid: str, check_id: str, resolved: bool, *, master: M.Master |
     done = set(state.get("checks_resolved", []))
     done = done | {check_id} if resolved else done - {check_id}
     state["checks_resolved"] = sorted(done)
+    title = next(c["title"] for c in case.email_checks if c.get("id") == check_id)
+    log_event(state, "check", f"{'Sorted' if resolved else 'Reopened'}: {title}", check=check_id)
     if not resolved:
         _withdraw(state)
     save_state(uid, state)
@@ -407,7 +452,10 @@ def approve(uid: str, approved: bool = True, *, master: M.Master | None = None) 
             _withdraw(state)  # the items changed since the last approval: its picks, quotes and HOD email don't stand
         state["approved_at"] = now()
         state["approved_codes"] = codes
+        n = len({c for v in codes.values() for c in v})
+        log_event(state, "approve", f"Approved the items to go to vendors ({n} item code{'s' * (n != 1)}).")
     else:
+        log_event(state, "approve", "Withdrew the approval.")
         _withdraw(state)
     save_state(uid, state)
     return build_case(uid, master=master)
@@ -507,5 +555,10 @@ def pick_vendors(uid: str, category: str, vendor_ids: list[str], *, master: M.Ma
         (state.get("compare") or {}).pop(category, None)
         CQ.drop_award(state, category)
     state.setdefault("vendor_picks", {})[category] = new
+    from ..vendors import store as V  # noqa: PLC0415
+
+    names = {v.id: v.name for v in V.load_all()}
+    log_event(state, "vendors", f"Picked {len(new)} vendor{'s' * (len(new) != 1)} for {category}: {', '.join(names.get(v, v) for v in new)}.",
+              category=category)
     save_state(uid, state)
     return build_case(uid, master=master)

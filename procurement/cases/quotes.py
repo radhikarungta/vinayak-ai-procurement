@@ -3,6 +3,8 @@ asking the HOD to approve it. Plain arithmetic and template text, no LLM.
 
 Where a quote comes from, per picked vendor and category:
 - uploaded: a PDF a person put on the vendor's row, kept in data/cases/<uid>.quotes/.
+- simulated (demo emails only): a quote the demo vendor "sends back" for an RFQ, priced from the
+  item code's price median with a fixed spread per vendor (`simulate_quote`), kept in the state.
 - the tender folder: a quotation PDF in the data pack (procurement/quotes/pack.py) whose file name
   matches the vendor in the directory (vendors were seeded from those names). It is linked by itself
   when the requirement is the same kind of work as the tender (a shared item code or work word);
@@ -35,7 +37,7 @@ from ..itemcodes import master as M
 from ..quotes import compare as C
 from ..quotes import pack
 from ..quotes import parse as P
-from ..quotes.models import Comparison, Quote, QuoteLine, TenderLine
+from ..quotes.models import Comparison, Quote, QuoteLine, TenderLine, Term
 from . import flow as F
 from . import reply as R
 
@@ -47,11 +49,12 @@ class Source(BaseModel):
     vendor_id: str
     vendor: str
     category: str
-    source: Literal["upload", "pack"]
+    source: Literal["upload", "pack", "simulated"]
     file: str
     at: str | None = None
     linked: Literal["auto", "manual"] | None = None  # tender-folder quotes only
     path: str
+    data: dict | None = None  # simulated quotes: the Quote itself
 
 
 def hod_email() -> str:
@@ -124,6 +127,10 @@ def sources(uid: str, picks: dict[str, list[str]], lines: list[F.CaseLine], stat
             if up and (p := upload_path(uid, vid, cat, stored=True)).exists():
                 got.append(Source(vendor_id=vid, vendor=name, category=cat, source="upload", file=up.get("original") or p.name, at=up.get("at"), path=str(p)))
                 continue
+            if sim := (state.get("sim_quotes") or {}).get(k):
+                got.append(Source(vendor_id=vid, vendor=name, category=cat, source="simulated", file=sim["quote"]["file"], at=sim["at"],
+                                  path="", data=sim["quote"]))
+                continue
             p = by_v.get(vid) if cat == pack.CATEGORY else None
             if p is None:
                 continue
@@ -139,7 +146,7 @@ def _parse(path: Path) -> Quote:
 
 
 def load_quote(s: Source) -> Quote:
-    q = _parse(Path(s.path)).model_copy(deep=True)
+    q = Quote(**s.data) if s.source == "simulated" else _parse(Path(s.path)).model_copy(deep=True)
     q.vendor = s.vendor
     return q
 
@@ -316,8 +323,29 @@ def recommend(cmp: Comparison | None, ids: list[str]) -> dict | None:
         n2 = ranked[1][0] if len(ranked) > 1 else None
         nxt = "" if n2 is None else f" The next, {n2.vendor}, is " + (f"{n2.pct_above_lowest:.1f}% higher." if n2.pct_above_lowest is not None
                                                                      else f"at {C.inr(n2.repriced_total)}.")
-        return {"vendor_id": vid, "vendor": v.vendor, "like_for_like": True,
+        return {"vendor_id": vid, "vendor": v.vendor, "like_for_like": True, "margin_pct": n2.pct_above_lowest if n2 else None,
                 "reason": f"Lowest complete quote on the same quantities: {C.inr(v.repriced_total)} excl. GST.{nxt}"}
+    # No quantities to re-price on, but every quote gives a rate per unit on every line: a vendor lowest on
+    # every line is the clear choice (rates per unit compare like for like whatever the quantities).
+    lines = [t.sl_no for t in cmp.tender if t.measured]
+    no_qty = all(t.qty is None for t in cmp.tender if t.measured)  # only when there really is nothing to total
+    rated = [(v, i, {ln.sl_no: ln.rate_per_tender_unit for ln in v.lines}) for v, i in pairs if not v.needs_vision and v.complete]
+    if lines and no_qty and len(rated) == len(pairs) and all(r.get(n) is not None for _, _, r in rated for n in lines):
+        best = [(v, i) for v, i, r in rated if all(r[n] <= min(o[n] for _, _, o in rated) + 0.005 for n in lines)]
+        if len(best) == 1:
+            v, vid = best[0]
+            unit = {t.sl_no: t.unit for t in cmp.tender}
+            mine = {ln.sl_no: ln.rate_per_tender_unit for ln in v.lines}
+            gaps = [(min(r[n] for w, _, r in rated if w is not v) - mine[n]) / mine[n] * 100 for n in lines if len(rated) > 1 and mine[n]]
+            if len(lines) == 1:
+                others = sorted(r[lines[0]] for w, _, r in rated if w is not v)
+                nxt = f" The next is ₹{others[0]:,.2f}." if others else ""
+                why = f"Lowest rate: ₹{mine[lines[0]]:,.2f}/{unit[lines[0]] or 'unit'} excl. GST.{nxt}"
+            else:
+                why = f"Lowest rate on all {len(lines)} lines."
+            return {"vendor_id": vid, "vendor": v.vendor, "like_for_like": True, "by_rate": True,
+                    "margin_pct": round(min(gaps), 2) if gaps else None,
+                    "reason": why + " The requirement gives no quantities to total, so this is on rates per unit."}
     quoted = sorted(((v, i) for v, i in pairs if v.complete and not v.needs_vision and v.as_quoted_total is not None), key=lambda x: x[0].as_quoted_total)
     if quoted:
         v, vid = quoted[0]
@@ -378,10 +406,10 @@ def category_view(case: F.Case, cat: str, lines: list[F.CaseLine], srcs: list[So
         "category": cat,
         "item_codes": avail,
         "basis": {"kind": kind, "lines": [t.model_dump() for t in basis]},
-        "quotes": [s.model_dump(exclude={"path"}) | {"quote": q.model_dump(), "selected": s.vendor_id in selected,
+        "quotes": [s.model_dump(exclude={"path", "data"}) | {"quote": q.model_dump(), "selected": s.vendor_id in selected,
                                                      "manual_rates": (manual.get(F.rfq_key(s.vendor_id, cat)) or {}).get("rates") or {}}
                    for s, q in loaded],
-        "offers": [s.model_dump(exclude={"path"}) for s in offers if s.category == cat],
+        "offers": [s.model_dump(exclude={"path", "data"}) for s in offers if s.category == cat],
         "waiting": [{"vendor_id": vid, "vendor": n} for vid, n in _names(case.vendor_picks.get(cat, [])) if vid not in ids],
         "selected": sel_ids,
         "comparison": cmp.model_dump() | {"vendor_ids": sel_ids, "lowest": _lows(cmp, sel_ids)} if cmp else None,
@@ -462,6 +490,7 @@ def upload(uid: str, vendor_id: str, category: str, data: bytes, filename: str |
     if (saved := (state.get("compare") or {}).get(category)) is not None and vendor_id not in saved:
         saved.append(vendor_id)
     drop_award(state, category)
+    F.log_event(state, "quote", f"Quote uploaded for {vendor_id} ({category}): {Path(filename or p.name).name}.", vendor_id=vendor_id, category=category)
     F.save_state(uid, state)
     return F.build_case(uid)
 
@@ -476,6 +505,7 @@ def link(uid: str, vendor_id: str, category: str, use: bool) -> F.Case:
         raise F.CaseError("There's no quote from this vendor in the tender folder.")
     state.setdefault("pack_links", {})[F.rfq_key(vendor_id, category)] = use
     drop_award(state, category)
+    F.log_event(state, "quote", f"{'Used' if use else 'Stopped using'} the tender-folder quote from {vendor_id} ({category}).", vendor_id=vendor_id)
     F.save_state(uid, state)
     return F.build_case(uid)
 
@@ -503,6 +533,7 @@ def set_rates(uid: str, vendor_id: str, category: str, rates: dict[str, float | 
     if clean and (saved := (state.get("compare") or {}).get(category)) is not None and vendor_id not in saved:
         saved.append(vendor_id)
     drop_award(state, category)
+    F.log_event(state, "quote", f"Rates typed in for {vendor_id} ({category}): {len(clean)}.", vendor_id=vendor_id)
     F.save_state(uid, state)
     return F.build_case(uid)
 
@@ -520,6 +551,7 @@ def pick_compare(uid: str, category: str, vendor_ids: list[str]) -> F.Case:
     state.setdefault("compare", {})[category] = list(dict.fromkeys(vendor_ids))
     if set(vendor_ids) != set(cv["selected"]):  # a different comparison: the award and HOD email on the old one go
         drop_award(state, category)
+        F.log_event(state, "compare", f"Comparing {len(vendor_ids)} quote{'s' * (len(vendor_ids) != 1)} for {category}.")
     F.save_state(uid, state)
     return F.build_case(uid)
 
@@ -531,6 +563,7 @@ def award(uid: str, category: str, vendor_id: str | None, reason: str | None = N
     state = F.load_state(uid)
     if vendor_id is None:
         drop_award(state, category)
+        F.log_event(state, "award", f"Cleared the vendor chosen for {category}.")
         F.save_state(uid, state)
         return F.build_case(uid)
     if vendor_id not in cv["selected"]:
@@ -546,6 +579,75 @@ def award(uid: str, category: str, vendor_id: str | None, reason: str | None = N
     drop_award(state, category)
     state.setdefault("award", {})[category] = {"vendor_id": vendor_id, "vendor": name, "reason": reason or rec["reason"], "at": F.now(),
                                                "recommended": rec["vendor_id"] if rec else None, "override": override}
+    F.log_event(state, "award", f"Chose {name} for {category}" + (" (not the recommended vendor)" if override else "") + f": {reason or rec['reason']}",
+                vendor_id=vendor_id, category=category)
+    F.save_state(uid, state)
+    return F.build_case(uid)
+
+
+# ── Demo: a vendor's quote, simulated ──────────────────────────────────────────────────────────
+
+# Rupees per unit when the vendor history has no median for a code (demo only).
+BASE_RATE = {"Waterproofing": 420.0, "Cement": 385.0, "Steel": 62.0, "Scaffolding": 48.0, "Tiles & adhesive": 510.0, "Concrete": 5200.0}
+
+
+def _spread(*parts: str, lo: float, hi: float) -> float:
+    """A fixed number in [lo, hi] for these strings, so a vendor's simulated rates are the same every run."""
+    h = int(hashlib.sha1("|".join(parts).encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    return lo + (hi - lo) * h
+
+
+def simulate_quote(uid: str, vendor_id: str, category: str) -> F.Case:
+    """Demo emails only: the vendor's quote for the RFQ we sent comes back. One row per item code on the
+    RFQ, on the requirement's quantities; rate = the code's price median (or a base rate) x a fixed
+    spread per vendor and code (about -10% to +18%), so vendors differ but the result is repeatable."""
+    from ..shortlist import score as S
+    from ..vendors import store as V
+
+    if not uid.isdigit():
+        raise F.CaseError("Simulated quotes are for demo emails only.")
+    case = F.build_case(uid)
+    _picked(case, vendor_id, category)
+    rfq = next((r for r in case.rfqs if (r.vendor_id, r.category) == (vendor_id, category)), None)
+    if rfq is None:
+        raise F.CaseError("Send (or mark as sent) the RFQ to this vendor first.")
+    groups, _ = F.approved_groups(case)
+    lines = groups.get(category, [])
+    state = F.load_state(uid)
+    avail = F.category_codes(lines)
+    chosen = (state.get("rfq_items") or {}).get(F.rfq_key(vendor_id, category))
+    codes = [c for c in avail if c in chosen] if chosen else avail
+    erp = {c: es[0].title for c, es in M.get_master().by_code().items()}
+    basis = {t.code: t for t in case_basis(lines, erp)}
+    meds = S.shortlist(category, codes).medians
+    v = next((x for x in V.load_all() if x.id == vendor_id), None)
+    name = v.name if v else vendor_id
+    bias = _spread(vendor_id, lo=0.94, hi=1.10)
+    qlines = []
+    for i, code in enumerate(codes, start=1):
+        t = basis.get(code)
+        med = meds.get(code) or {}
+        unit = (t.unit if t and t.unit else "") or med.get("unit") or "nos"
+        rate = round((med.get("median") or BASE_RATE.get(category, 100.0)) * bias * _spread(vendor_id, code, lo=0.95, hi=1.08), 2)
+        qty = t.qty if t else None
+        qlines.append(QuoteLine(sl_no=i, code=code, description=f"{code} {erp.get(code) or (t.description if t else code)}", unit=unit,
+                                unit_as_written=unit.upper(), qty=qty, rate=rate, amount=round(rate * qty, 2) if qty else None, page=1,
+                                arithmetic_ok=True if qty else None))
+    lead = int(_spread(vendor_id, "lead", lo=5, hi=15))
+    pay = V.credit_label(v.credit_days, v.advance_pct) if v else "30 days credit"
+    terms = [Term(key="gst", value="18% extra", page=1, text="GST 18% extra"),
+             Term(key="validity_days", value="30", page=1, text="Valid for 30 days"),
+             Term(key="payment", value=pay if pay != "not known" else "30 days credit", page=1, text=f"Payment: {pay}"),
+             Term(key="lead_time_days", value=str(lead), page=1, text=f"Mobilise within {lead} days")]
+    q = Quote(vendor=name, file=f"{vendor_id}-quote-simulated.pdf", date=F.now()[:10], lines=qlines, terms=terms, read_confidence="high",
+              notes=["Simulated for the demo: not a real quote."])
+    state.setdefault("sim_quotes", {})[F.rfq_key(vendor_id, category)] = {"at": F.now(), "quote": q.model_dump()}
+    if (saved := (state.get("compare") or {}).get(category)) is not None and vendor_id not in saved:
+        saved.append(vendor_id)  # like an upload: a quote that comes in joins a comparison already picked
+    total = sum(ln.amount or 0 for ln in qlines)
+    F.log_event(state, "quote", f"{name} quoted for {category}" + (f": {C.inr(total)} excl. GST" if total else "") + " (simulated).",
+                actor="vendor", vendor_id=vendor_id, category=category)
+    drop_award(state, category)
     F.save_state(uid, state)
     return F.build_case(uid)
 
@@ -618,6 +720,7 @@ def send_hod(uid: str, to: str, subject: str, body: str, *, mark_only: bool = Fa
     if state.get("hod"):
         state.setdefault("hod_history", []).append(state["hod"])
     state["hod"] = {"to": addr, "subject": subject, "body": body, "at": F.now(), "via": via}
+    F.log_event(state, "email_hod", f"Email to the HOD {'sent' if via == 'smtp' else 'marked as sent'} to {addr}.")
     F.save_state(uid, state)
     return state["hod"]
 
@@ -632,5 +735,6 @@ def approve_hod(uid: str, approved: bool = True) -> F.Case:
         hod["approved_by_hod_at"] = F.now()
     else:
         hod.pop("approved_by_hod_at", None)
+    F.log_event(state, "hod", "HOD approved." if approved else "HOD approval undone.")
     F.save_state(uid, state)
     return F.build_case(uid)
