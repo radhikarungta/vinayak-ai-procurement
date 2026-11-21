@@ -319,3 +319,49 @@ def test_answer_that_cannot_be_kept_is_retried(smtp, monkeypatch):
     monkeypatch.setattr(SR, "record", real)
     assert mailbox.sync(cfg, imap_factory=imap)["site_replies"] == 1
     assert json.loads((mailbox.STORE / "77.json").read_text())["status"] == "site_reply"
+
+
+# ── demo: simulated answer ─────────────────────────────────────────────────────────────────────
+
+
+def test_simulated_answer_round_trip_without_a_key():
+    with pytest.raises(F.CaseError, match="first"):
+        SR.simulate("1")
+    R.send("1", "site@example.com", "Re: Waterproofing, Tower-1", "body", mark_only=True)
+    r = SR.simulate("1")
+    assert r.via == "simulated" and r.read == "read" and "without the model" in r.error
+    assert [s.ref for s in r.suggestions] == ["1-r4", "1-r5", "1-r6", "check:basics"]
+    assert all(s.action != "unclear" for s in r.suggestions)
+    assert all(SR.quote_found(s.quote, SR._norm(r.body)) for s in r.suggestions)  # every answer is in the text
+    c = F.build_case("1")
+    assert c.site_replied
+    for s in r.suggestions:  # what Accept does in the UI
+        if s.ref.startswith("check:"):
+            c = F.resolve_check("1", s.ref[6:], True)
+        else:
+            c = F.decide("1", s.ref, s.action, s.codes, note=s.note or None)
+    assert c.stage == "approve"
+
+
+def test_simulated_answer_goes_through_the_model_when_set():
+    R.send("1", "site@example.com", "Re: x", "body", mark_only=True)
+    client, calls = fake_client(GOOD)
+    r = SR.simulate("1", client=client)
+    # The model's answer is used (and checked), not the template's own mapping: GOOD quotes another reply.
+    assert calls and r.error is None and "aren't in the reply" in r.suggestions[0].why_unclear
+
+
+def test_simulate_is_for_demo_emails_only():
+    with pytest.raises(F.CaseError, match="demo"):
+        SR.simulate("m41")
+
+
+def test_api_simulate():
+    app = FastAPI()
+    app.include_router(cases_api.router)
+    cl = TestClient(app)
+    assert cl.get("/api/cases/1").json()["demo"] is True
+    assert cl.post("/api/cases/1/site-reply/simulate").status_code == 400  # nothing sent yet
+    cl.post("/api/cases/1/reply", json={"to": "site@example.com", "subject": "Re: x", "body": "b", "mark_only": True})
+    c = cl.post("/api/cases/1/site-reply/simulate").json()
+    assert c["site_replied"] and c["site_replies"][0]["via"] == "simulated"

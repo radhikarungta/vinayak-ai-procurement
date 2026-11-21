@@ -8,6 +8,9 @@ An email that answers a reply we sent to the site (In-Reply-To / References carr
 the same subject from the address we wrote to) is not a new requirement: it is kept on that case as
 the site's answer (procurement/cases/site_reply) and saved here with status "site_reply".
 
+A new requirement that was read is handed to the requirement agent (procurement/cases/agent.py),
+which takes it as far as it can without sending an email.
+
 Before any model call, each email is checked against the email rules (procurement/email_rules).
 An email a rule blocks or holds is saved with status "skipped" and the decision, costs nothing,
 and is not retried. Delete its data/inbox/<uid>.json to have the next sync look at it again.
@@ -220,6 +223,8 @@ def sync(cfg: MailConfig, imap_factory=imaplib.IMAP4_SSL, client=None) -> dict:
             else:
                 _keep_sheet(uid, mail, rec["result"])
         _path(uid).write_text(json.dumps(rec, indent=2))
+        if rec.get("status") == "read":
+            _run_agent(uid)
     return {"fetched": len(new), "read": done, "failed": failed, "skipped": skipped, "site_replies": answers,
             "waiting_for_key": len(new) - done - failed - skipped - answers}
 
@@ -231,6 +236,18 @@ def _headers(raw: bytes) -> dict[str, str | None]:
         return {"message-id": None, "in-reply-to": None, "references": None}
     get = lambda k: (str(msg.get(k)).strip() or None) if msg.get(k) else None  # noqa: E731
     return {"message-id": get("Message-ID"), "in-reply-to": get("In-Reply-To"), "references": get("References")}
+
+
+def _run_agent(uid: str) -> None:
+    """A new requirement landed: the agent takes it as far as it can (live mode stops before any email goes out)."""
+    from .cases import agent  # noqa: PLC0415 - cases imports this module
+
+    if os.environ.get("AGENT_ON_ARRIVAL", "1") == "0":
+        return
+    try:
+        agent.start(f"m{uid}")
+    except Exception as e:  # noqa: BLE001 - the email is saved either way; the agent can be run again from the case
+        log.warning("Agent on new requirement m%s failed: %s", uid, e)
 
 
 def _iso(date_header: str | None) -> str | None:

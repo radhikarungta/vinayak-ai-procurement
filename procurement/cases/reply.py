@@ -190,5 +190,7 @@ def send(uid: str, to: str, subject: str, body: str, *, mark_only: bool = False,
     state = F.load_state(uid)
     state.setdefault("replies", []).append(sent.model_dump())
     state.pop("redecided", None)
+    F.log_event(state, "email_site", f"Reply to the site {'sent' if via == 'smtp' else 'marked as sent'} to {addr}: "
+                f"{len(sent.asked or [])} question{'s' * (len(sent.asked or []) != 1)}.")
     F.save_state(uid, state)
     return sent

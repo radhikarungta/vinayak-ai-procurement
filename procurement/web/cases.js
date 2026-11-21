@@ -77,6 +77,25 @@
 .wf ul.sum{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:.88rem}
 .wf label.btn input[type=file]{display:none}
 .kpis.k6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.wf .views{display:flex;gap:6px;align-items:center}
+.wf .views button.on{outline:2px solid var(--accent);outline-offset:-1px}
+.wf .agentbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:.85rem}
+.wf .agentbar.needs_you,.wf .agentbar.error{border-color:var(--warn)} .wf .agentbar.ready_for_hod,.wf .agentbar.done{border-color:var(--good)}
+.wf .agentbar details{flex-basis:100%}
+.wf .agentbar.running{border-color:var(--accent)}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:wfspin .8s linear infinite;vertical-align:-1px}
+@keyframes wfspin{to{transform:rotate(360deg)}} .wf .agentbar ol{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+.wf .thread{display:flex;flex-direction:column;gap:10px}
+.wf .mail{max-width:78%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:4px}
+.wf .mail.out{align-self:flex-end;background:var(--accent-soft);border-color:var(--accent)}
+.wf .mail.old{opacity:.55}
+.wf .mail .mh{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.8rem}
+.wf .mail pre{white-space:pre-wrap;font:inherit;font-size:.85rem;margin:6px 0 0;max-height:240px;overflow:auto}
+.wf .hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.wf .hist li{display:grid;grid-template-columns:150px 80px 1fr;gap:10px;padding:7px 4px;border-bottom:1px solid var(--line);font-size:.85rem}
+.wf .who{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:6px;border:1px solid var(--line);justify-self:start}
+.wf .who.agent{border-color:var(--accent);color:var(--accent)} .wf .who.site{border-color:var(--warn);color:var(--warn)}
+.wf .who.vendor{border-color:var(--good);color:var(--good)} .wf .who.system{color:var(--muted)}
 @media (max-width:900px){.wf .stepper{grid-template-columns:repeat(4,minmax(0,1fr))}.kpis.k6{grid-template-columns:repeat(2,minmax(0,1fr))}}`;
     document.head.appendChild(st);
   }
@@ -179,7 +198,7 @@
         ${sent ? `<div class="small"><b>Sent</b><ul style="margin:4px 0 0;padding-left:18px">${sent}</ul></div>` : ""}</div>`
       : sent ? `<div class="panel small"><b>Replies to the site</b><ul style="margin:4px 0 0;padding-left:18px">${sent}</ul></div>` : "";
     return `<section class="sec" id="s2"><div class="sh"><h3>2 · Item code mapping</h3><span class="small muted">${esc(c.headline)}</span></div>
-      ${siteAnswers(c)}
+      ${siteAnswers(c)}${simBox(c)}
       ${c.lines.map(lineCard).join("") || `<div class="empty">No requirement lines were read from this email.</div>`}
       ${reply}${pasteBox(c)}</section>`;
   }
@@ -207,11 +226,18 @@
     const status = r.read === "read" ? "" : `<p class="small muted">${esc(r.error || (r.read === "nothing_asked" ? "Nothing was open when it came in." : ""))}
         ${r.read === "needs_key" || r.read === "failed" ? `<button class="btn" style="padding:2px 8px;margin-left:6px" data-reread="${i}">Read again</button>` : ""}</p>`;
     return `<div class="panel ${c.site_replied ? "agent" : ""}"><div class="eyebrow">The site's answer${all.length > 1 ? ` (latest of ${all.length})` : ""}</div>
-      <div class="small muted">${esc(when(r.at))} · ${r.via === "email" ? "by email" : "pasted in"}${r.sender ? " · " + esc(r.sender) : ""}
+      <div class="small muted">${esc(when(r.at))} · ${r.via === "email" ? "by email" : r.via === "simulated" ? "simulated (demo)" : "pasted in"}${r.sender ? " · " + esc(r.sender) : ""}
         ${r.read === "read" ? `<button class="btn" style="padding:2px 8px;margin-left:6px" data-reread="${i}" title="Read it against the questions open now">Read again</button>` : ""}</div>
       <details><summary>The reply</summary><p class="body">${esc(r.body)}</p></details>
       ${rows ? `<p class="small muted">Suggested from the reply. Check each one; nothing changes until you accept.</p><ul class="sum" style="list-style:none;padding:0;gap:10px">${rows}</ul>` : ""}
       ${status}</div>`;
+  }
+  // Demo emails: once the reply has gone, the site's answer can be made to arrive.
+  function simBox(c) {
+    if (!c.demo || !c.replies.length || c.site_replied || !(c.counts.to_reply || c.counts.blocking)) return "";
+    return `<div class="panel" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div><b>Waiting on the site.</b> <span class="small muted">Demo email: no real site inbox to answer it.</span></div>
+      <button class="btn primary" data-simulate="1">Simulate the site's reply</button></div>`;
   }
   function pasteBox(c) {
     if (!(c.replies.length || c.draft.needed)) return "";
@@ -393,8 +419,45 @@
 
   // ── drawing: one requirement as a full page, its steps as tabs ──
   const STEP_FOR = {item_codes: "s2", waiting_on_site: "s2", approve: "s3", vendors: "s4", rfq: "s5", rfq_sent: "s5", quotes: "s6", hod: "s7", done: "s7"};
-  const SECTIONS = {s1: secRequirement, s2: secItemCodes, s3: secApprove, s4: secVendors, s5: secRfq, s6: secQuotes, s7: secHod};
-  let active = null;
+  const SECTIONS = {s1: secRequirement, s2: secItemCodes, s3: secApprove, s4: secVendors, s5: secRfq, s6: secQuotes, s7: secHod,
+    thread: secThread, history: secHistory};
+
+  // ── Email thread and activity history ──
+  const PARTY = {site: "Site", vendor: "Vendor", hod: "HOD"};
+  const VIA = {smtp: "sent", marked: "marked as sent", simulated: "simulated", pasted: "pasted in", email: "by email", upload: "uploaded"};
+  const firstLine = t => (t.split("\n").find(l => l.trim()) || "Show").slice(0, 90);
+  function secThread(c) {
+    const ms = c.thread.map(m => `<div class="mail ${m.direction}${m.superseded ? " old" : ""}">
+      <div class="mh"><b>${esc(m.label)}</b><span class="muted">${esc(when(m.at) || "")}${m.via ? " · " + esc(VIA[m.via] || m.via) : ""}${m.superseded ? " · superseded" : ""}</span></div>
+      <div class="small muted">${m.direction === "in" ? "From " + esc(m.from) : "To " + esc(m.to || PARTY[m.party])}${m.subject ? " · " + esc(m.subject) : ""}</div>
+      ${m.body ? `<details><summary class="small">${esc(firstLine(m.body))}</summary><pre>${esc(m.body)}</pre></details>` : ""}
+      ${m.note ? `<div class="small muted">Attached: ${esc(m.note)}</div>` : ""}</div>`).join("");
+    return `<section class="sec"><div class="sh"><h3>Email thread</h3><span class="small muted">${c.thread.length} email${c.thread.length === 1 ? "" : "s"} on this requirement · ours on the right</span></div>
+      <div class="thread">${ms}</div></section>`;
+  }
+  const WHO = {person: "you", agent: "agent", site: "site", vendor: "vendor", system: "system"};
+  function secHistory(c) {
+    const rows = c.history.slice().reverse().map(e => `<li><span class="mono small muted">${esc(when(e.at) || "")}</span>
+      <span class="who ${esc(e.actor)}">${esc(WHO[e.actor] || e.actor)}</span><span>${esc(e.text)}</span></li>`).join("");
+    return `<section class="sec"><div class="sh"><h3>History</h3><span class="small muted">Every action on this requirement, newest first</span></div>
+      <ul class="hist">${rows}</ul></section>`;
+  }
+  const STOP = {needs_you: ["Needs you", "warn"], ready_for_hod: ["HOD email ready", "good"], done: ["Done", "good"], error: ["Error", "bad"]};
+  function agentBar(c) {
+    const a = c.agent;
+    if (!a) return c.stage === "done" ? "" : `<div class="agentbar"><span style="flex:1">The agent can take this requirement as far as it can on its own${c.demo ? " (demo: sends, the site's answer and the quotes are simulated)" : " (it stops before any email goes out)"}.</span>
+      <button class="btn primary" data-agent="1">Run agent</button></div>`;
+    const steps = a.steps.map(s => `<li>${esc(s.text)}</li>`).join("");
+    if (a.running) return `<div class="agentbar running"><span class="chip acc"><span class="spin"></span> Agent working</span>
+      <span style="flex:1;min-width:200px">${a.steps.length ? `Step ${a.steps.length}: ${esc(a.steps[a.steps.length - 1].text)}` : "Starting: reading the requirement…"}</span>
+      ${steps ? `<details open><summary class="small">So far: ${a.steps.length} step${a.steps.length === 1 ? "" : "s"}</summary><ol>${steps}</ol></details>` : ""}</div>`;
+    const [l, t] = STOP[a.stopped] || [a.stopped, ""];
+    return `<div class="agentbar ${esc(a.stopped)}"><span class="chip ${t}">Agent · ${l}</span><span style="flex:1;min-width:200px">${esc(a.reason || "")}</span>
+      ${a.step && a.step !== active ? `<button class="btn" data-jump="${esc(a.step)}">Open step ${esc(a.step.slice(1))}</button>` : ""}
+      ${c.stage !== "done" && a.stopped !== "ready_for_hod" ? `<button class="btn primary" data-agent="1">Run again</button>` : ""}
+      ${steps ? `<details><summary class="small">What it did: ${a.steps.length} step${a.steps.length === 1 ? "" : "s"}, ${esc(when(a.at))}</summary><ol>${steps}</ol></details>` : ""}</div>`;
+  }
+  let active = null, pollTimer = null, listTimer = null;
 
   function fit() {
     const page = root && root.querySelector(".wf");
@@ -410,11 +473,32 @@
     root.innerHTML = `<div class="wf">
       <div class="head"><button class="btn" data-back="1">← All requirements</button>
         <div style="min-width:0;flex:1"><h2>${esc(c.subject || "(no subject)")}</h2><div class="small muted">${esc([c.project, c.sender, c.date].filter(Boolean).join(" · "))}</div></div>
+        <div class="views"><button class="btn ${active === "thread" ? "on" : ""}" data-jump="thread">Email thread (${c.thread.length})</button>
+          <button class="btn ${active === "history" ? "on" : ""}" data-jump="history">History</button></div>
         <span class="chip ${tone}">${label}</span></div>
       <div class="stepper" role="tablist">${steps(c).map(s => `<button role="tab" aria-selected="${s.id === active}" class="${s.state}${s.id === active ? " on" : ""}" data-jump="${s.id}"><span class="small">STEP ${s.n}</span><b>${esc(s.title)}</b><span class="small">${esc(s.note)}</span></button>`).join("")}</div>
+      ${agentBar(c)}
       <div class="pane">${SECTIONS[active](c)}</div></div>`;
     fit();
     if (active === "s4" && c.approved_at) loadVendors();
+    schedulePoll(c);
+  }
+  // While the agent works: fetch the case every 1.5 s and redraw. If the person is typing in a field,
+  // only the agent bar is updated, so nothing they're writing is lost.
+  function schedulePoll(c) {
+    clearTimeout(pollTimer);
+    if (!(c.agent && c.agent.running)) return;
+    pollTimer = setTimeout(async () => {
+      if (!current || current.uid !== c.uid || !document.body.contains(root)) return;
+      let n;
+      try { n = await getJSON(`/api/cases/${c.uid}`); } catch (e) { return schedulePoll(c); }
+      if (!current || current.uid !== n.uid) return;
+      const typing = root.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+      if (!typing) return drawCase(n);
+      const bar = root.querySelector(".agentbar");
+      if (bar) bar.outerHTML = agentBar(n);
+      schedulePoll(n);
+    }, 1500);
   }
   async function loadVendors() {
     const out = root.querySelector("#v-out");
@@ -463,6 +547,8 @@
       if (a === "resolved") return act(b, () => post(`${base}/checks/${encodeURIComponent(ref.slice(6))}`, {resolved: true}));
       return act(b, () => post(`${base}/lines/${encodeURIComponent(ref)}`, {action: a, codes: b.dataset.sc ? b.dataset.sc.split(",") : [], note: b.dataset.sn || null}));
     }
+    if (b.dataset.agent) { b.textContent = "Agent working…"; return act(b, () => post(`${base}/agent`, {})); }
+    if (b.dataset.simulate) { b.textContent = "Reading the site's reply…"; return act(b, () => post(`${base}/site-reply/simulate`, {})); }
     if (b.dataset.reread) return act(b, () => post(`${base}/site-reply/${b.dataset.reread}/read`, {}));
     if (b.dataset.pastesend) {
       const t = root.querySelector("textarea[data-paste]").value;
@@ -558,28 +644,45 @@
     const hod = x.stage === "done" ? cell("done", "Approved") : x.stage === "hod" ? cell("now", x.hod_sent ? "Awaiting HOD" : "To send") : cell("", "—");
     return codes + reply + appr + vend + rfq + quotes + hod;
   }
-  window.mountOverview = async function (el) {
+  window.mountOverview = async function (el, quiet) {
     style();
-    el.innerHTML = `<div class="empty">Loading…</div>`;
+    clearTimeout(listTimer);
+    if (!quiet) el.innerHTML = `<div class="empty">Loading…</div>`;
     try {
       const d = await getJSON("/api/cases");
+      // While the agent works on any requirement, refresh the list every 2 s (quietly) to show it move.
+      if (d.items && d.items.some(x => x.agent && x.agent.running))
+        listTimer = setTimeout(() => { if (!el.hidden && document.body.contains(el) && el.offsetParent !== null) window.mountOverview(el, true); }, 2000);
       if (!d.ready) { el.innerHTML = `<div class="err">${esc(d.message)}</div>`; return; }
       const items = d.items, n = s => items.filter(x => s.includes(x.stage)).length;
       const kpi = [["Requirement emails", items.length, ""], ["On item codes", n(["item_codes", "waiting_on_site"]), "clar"],
         ["To approve", n(["approve"]), "clar"], ["Vendors / RFQ", n(["vendors", "rfq"]), ""],
         ["Quotes / HOD", n(["rfq_sent", "quotes", "hod"]), "clar"], ["HOD approved", n(["done"]), "clear"]];
       el.innerHTML = `<div class="kpis k6">${kpi.map(([l, v, t]) => `<div class="kpi ${t}"><span class="v">${v}</span><span class="l">${l}</span></div>`).join("")}</div>
-        <section class="panel"><div class="eyebrow">Requirement emails · newest first · click a row to work on it</div>
+        <section class="panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="eyebrow">Requirement emails · newest first · click a row to work on it</div>
+          <div class="acts"><button class="btn" data-arrive="1" title="Demo: a new requirement email lands and the agent starts on it by itself">Simulate a new requirement email</button>
+          <button class="btn primary" data-runall="1" title="Takes every unfinished requirement as far as it can; stops where you're needed">Run agent on all</button></div></div>
         <div class="tbl"><table><thead><tr><th>Received</th><th>Requirement</th><th>Now</th><th>2 · Item codes</th><th>Reply to site</th><th>3 · Approve</th><th>4 · Vendors</th><th>5 · RFQ</th><th>6 · Quotes</th><th>7 · HOD</th></tr></thead><tbody>
         ${items.map(x => { const [l, t] = STAGE[x.stage] || [x.stage, ""];
           if (x.stage === "error") return `<tr><td class="mono" style="white-space:nowrap">${esc((x.date || "").replace(/^\w+, /, "").slice(0, 11))}</td>
             <td><b>${esc(x.subject || "Email " + x.uid)}</b></td><td><span class="chip ${t}">${l}</span></td><td colspan="7" class="small muted">${esc(x.headline)}</td></tr>`;
           return `<tr class="row" tabindex="0" data-case="${esc(x.uid)}"><td class="mono" style="white-space:nowrap">${esc((x.date || "").replace(/^\w+, /, "").slice(0, 11))}</td>
-            <td><b>${esc(x.subject)}</b><div class="small muted">${esc(x.project || "")}</div></td><td><span class="chip ${t}">${l}</span></td>${track(x)}</tr>`; }).join("")}
+            <td><b>${esc(x.subject)}</b><div class="small muted">${esc(x.project || "")}</div></td><td><span class="chip ${t}">${l}</span>${x.agent ? (x.agent.running ? `<div class="small" style="margin-top:3px;color:var(--accent)" title="${esc(x.agent.last || "")}"><span class="spin"></span> Agent working…</div>`
+              : `<div class="small ${x.agent.stopped === "needs_you" || x.agent.stopped === "error" ? "" : "muted"}" title="${esc(x.agent.reason || "")}" style="margin-top:3px">${x.agent.stopped === "needs_you" ? "Agent: needs you" : x.agent.stopped === "error" ? "Agent: error" : "Agent: done its part"}</div>`) : ""}</td>${track(x)}</tr>`; }).join("")}
         </tbody></table></div></section>`;
       if (!el.dataset.wired) {
         el.dataset.wired = "1";
-        el.addEventListener("click", e => { const r = e.target.closest("tr[data-case]"); if (r) window.openCase(r.dataset.case); });
+        el.addEventListener("click", e => {
+          const b = e.target.closest("button[data-runall],button[data-arrive]");
+          if (b) {
+            b.disabled = true;
+            post(b.dataset.arrive ? "/api/cases/arrive" : "/api/cases/agent/run-all", {}).then(() => window.mountOverview(el))
+              .catch(err => { b.disabled = false; b.insertAdjacentHTML("afterend", `<div class="err">${esc(err.message)}</div>`); });
+            return;
+          }
+          const r = e.target.closest("tr[data-case]"); if (r) window.openCase(r.dataset.case);
+        });
         el.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.matches("tr[data-case]")) window.openCase(e.target.dataset.case); });
       }
     } catch (e) { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; }

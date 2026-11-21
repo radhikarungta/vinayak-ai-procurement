@@ -11,7 +11,10 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from ..itemcodes import master as M
+from . import agent as A
+from . import arrivals as AR
 from . import flow as F
+from . import timeline as T
 from . import quotes as CQ
 from . import reply as R
 from . import rfq as Q
@@ -48,12 +51,17 @@ def _full(c: F.Case, m: M.Master) -> dict:
         "rfq_drafts": [d.model_dump() for d in Q.drafts(c, master=m)],
         "send": R.can_send(),
         "quotes": CQ.view(c),
+        "demo": c.uid.isdigit(),  # from the demo inbox (mailbox emails are "m<uid>"): answers and quotes can be simulated
+        "thread": T.thread(c),
+        "history": T.history(c),
+        "agent": T.last_run(c),
     }
 
 
 def _do(fn, *args, **kw):
     try:
-        return fn(*args, **kw)
+        with F.STATE_LOCK:  # never interleaved with an agent move on the same files
+            return fn(*args, **kw)
     except F.CaseError as e:
         raise HTTPException(400, str(e)) from e
     except R.SendError as e:
@@ -81,7 +89,9 @@ def list_cases() -> dict:
                       "stage": c.stage, "counts": c.counts, "headline": c.headline, "replies": len(c.replies),
                       "approved": bool(c.approved_at), "picked": sum(len(v) for v in c.vendor_picks.values()),
                       "rfqs_sent": len({r.vendor_id for r in c.rfqs}), "quotes_in": c.quotes_in,
-                      "awarded": [a["vendor"] for a in c.award.values()], "hod_sent": bool(c.hod)})
+                      "awarded": [a["vendor"] for a in c.award.values()], "hod_sent": bool(c.hod),
+                      "agent": (lambda a: {"stopped": a["stopped"], "reason": a["reason"], "running": a.get("running", False),
+                                          "last": (a.get("steps") or [{}])[-1].get("text")} if a else None)(T.last_run(c))})
     return {"ready": True, "message": None, "items": items}
 
 
@@ -109,6 +119,30 @@ def summary() -> dict:
         ],
         "ready": True,
     }
+
+
+@router.post("/agent/run-all")
+def run_agent_all() -> dict:
+    """The agent on every requirement email not finished yet, oldest first, one after another in the background."""
+    m = _master()
+    todo = []
+    for r in reversed(F.records()):
+        uid = str(r["uid"])
+        try:
+            if F.build_case(uid, master=m, rec=r).stage != "done":
+                todo.append(uid)
+        except Exception:  # noqa: BLE001 - a requirement that can't be built is skipped (the list shows it as an error)
+            log.exception("Requirement %s couldn't be built", uid)
+    return {"started": A.start_many(todo)}
+
+
+@router.post("/arrive")
+def new_email() -> dict:
+    """Demo: a new requirement email lands and the agent starts on it by itself."""
+    m = _master()
+    rec = _do(AR.arrive)
+    A.start(rec["uid"], master=m)
+    return {"uid": rec["uid"], "subject": rec["result"]["email"].get("subject")}
 
 
 @router.get("/{uid}")
@@ -164,6 +198,31 @@ def paste_site_reply(uid: str, body: SiteReplyIn) -> dict:
     m = _master()
     _case(uid, m)
     _do(SR.record, uid, body.body, sender=body.sender, via="pasted", master=m)
+    return _full(_case(uid, m), m)
+
+
+@router.post("/{uid}/agent")
+def run_agent(uid: str) -> dict:
+    """Move the requirement on until a person is needed, or the HOD email is ready."""
+    m = _master()
+    _case(uid, m)
+    A.start(uid, master=m)  # in the background, a few seconds per step; the page polls until it stops
+    return _full(_case(uid, m), m)
+
+
+@router.post("/{uid}/quotes/{vendor_id}/simulate")
+def simulate_quote(uid: str, vendor_id: str, category: str) -> dict:
+    m = _master()
+    _case(uid, m)
+    return _full(_do(CQ.simulate_quote, uid, vendor_id, category), m)
+
+
+@router.post("/{uid}/site-reply/simulate")
+def simulate_site_reply(uid: str) -> dict:
+    """Demo emails only: the site's answer to our reply arrives."""
+    m = _master()
+    _case(uid, m)
+    _do(SR.simulate, uid, master=m)
     return _full(_case(uid, m), m)
 
 
