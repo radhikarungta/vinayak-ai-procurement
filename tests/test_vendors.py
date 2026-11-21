@@ -13,9 +13,9 @@ from procurement.vendors import seed, store
 from procurement.vendors.api import router
 
 # Made-up names, shaped like the real list (spacing, legal suffixes, a name that overlaps a quote).
-LIST_NAMES = ["S K CONSTRUCTION", "NORTHWIND SALES & SERVICES PRIVATE LIMITED", "Ray Electricals Pvt. Ltd.",
+LIST_NAMES = ["R K CONSTRUCTION", "NORTHWIND SALES & SERVICES PRIVATE LIMITED", "Ray Electricals Pvt. Ltd.",
               "ACME TESTING LABORATORY", "BLUE FURNITURE", "J K ENTERPRISE"]
-QUOTES = ["Northwind", "SK_Construction", "Riverbank_Construction"]
+QUOTES = ["Northwind", "RK_Construction", "Riverbank_Construction"]
 
 
 def make_pack(root, names=LIST_NAMES, quotes=QUOTES):
@@ -57,7 +57,7 @@ def rec(**kw):
 
 # ── names, GSTIN, scoring ─────────────────────────────────────────────────────────────────────
 def test_name_normalisation():
-    assert store.norm_name("S K CONSTRUCTION") == store.norm_name("SK Construction") == "sk construction"
+    assert store.norm_name("R K CONSTRUCTION") == store.norm_name("RK Construction") == "rk construction"
     assert store.norm_name("Foo Pvt. Ltd.") == store.norm_name("FOO PRIVATE LIMITED") == "foo"
 
 
@@ -84,7 +84,7 @@ def test_seed_merges_and_is_idempotent(paths):
     assert r["vendors"] == 7  # 6 on the list + 3 quotes − 2 already on the list
     assert r["in_both_sources"] == 2 and r["merged_this_run"] == 2
     vs = {v.name: v for v in store.load_all()}
-    sk = vs["S K CONSTRUCTION"]
+    sk = vs["R K CONSTRUCTION"]
     assert sk.sources == [seed.LIST_SOURCE, seed.QUOTE_SOURCE]
     assert sk.categories == ["Waterproofing"] and sk.categories_to_confirm == []
     assert set(sk.projects) == {"Hillside", seed.QUOTE_PROJECT}
@@ -134,8 +134,8 @@ def test_api_crud_and_filters(client, paths):
     assert r.status_code == 200 and r.json()["count"] == 7
 
     assert {v["name"] for v in client.get("/api/vendors", params={"category": "waterproofing"}).json()["items"]} == {
-        "S K CONSTRUCTION", "NORTHWIND SALES & SERVICES PRIVATE LIMITED", "Riverbank Construction"}
-    assert [v["name"] for v in client.get("/api/vendors", params={"q": "sk construction"}).json()["items"]] == ["S K CONSTRUCTION"]
+        "R K CONSTRUCTION", "NORTHWIND SALES & SERVICES PRIVATE LIMITED", "Riverbank Construction"}
+    assert [v["name"] for v in client.get("/api/vendors", params={"q": "rk construction"}).json()["items"]] == ["R K CONSTRUCTION"]
     assert client.get("/api/vendors", params={"status": "approved"}).json()["count"] == 0
     assert client.get("/api/vendors", params={"status": "nope"}).status_code == 400
 

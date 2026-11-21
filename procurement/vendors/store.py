@@ -56,7 +56,7 @@ _LEGAL = {"pvt", "private", "ltd", "limited", "llp", "co", "company", "inc", "p"
 
 def name_tokens(name: str) -> list[str]:
     """Lower-case words without punctuation or legal suffixes; runs of single letters are joined
-    ("S K CONSTRUCTION" and "SK Construction" both give ["sk", "construction"])."""
+    ("R K CONSTRUCTION" and "RK Construction" both give ["rk", "construction"])."""
     words = re.sub(r"[^a-z0-9]+", " ", name.lower().replace("&", " ")).split()
     while words and words[-1] in _LEGAL:
         words.pop()
