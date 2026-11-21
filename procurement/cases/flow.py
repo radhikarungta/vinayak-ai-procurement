@@ -35,6 +35,7 @@ from pydantic import BaseModel
 
 from .. import mailbox
 from ..itemcodes import master as M
+from . import db as D
 from ..itemcodes.match import LineMatch, lines_from_record, match_lines
 
 DEMO_INBOX = M.ROOT / "samples" / "demo_inbox.json"
@@ -139,7 +140,9 @@ def _store_path(uid: str) -> Path:
 
 
 def load_state(uid: str) -> dict:
-    p = _store_path(uid)
+    p = _store_path(uid)  # also checks the id
+    if D.enabled():
+        return D.load(uid) or {"decisions": {}, "replies": []}
     return json.loads(p.read_text()) if p.exists() else {"decisions": {}, "replies": []}
 
 
@@ -196,6 +199,8 @@ def log_event(state: dict, kind: str, text: str, *, actor: str | None = None, **
 
 def save_state(uid: str, state: dict) -> None:
     p = _store_path(uid)
+    if D.enabled():  # Supabase (procurement/cases/db.py); local files otherwise
+        return D.save(uid, state)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(f".{p.name}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(state, indent=2))
