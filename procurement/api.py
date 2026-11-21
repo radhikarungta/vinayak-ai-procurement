@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import llm, mailbox  # mailbox loads .env
+from . import auth, llm, mailbox  # mailbox loads .env
 from .intake import extract
 from .intake.email_parser import RawAttachment
 from .intake.models import IntakeResult
@@ -22,6 +22,9 @@ SAMPLE_REPLAY = ROOT / "samples" / "riverside_t2_waterproofing.extraction.json"
 MAX_UPLOAD = 15 * 1024 * 1024
 
 app = FastAPI(title="Vinayak procurement · email intake")
+# The admin login in front of everything (procurement/auth.py; AUTH=off turns it off).
+app.middleware("http")(auth.middleware)
+app.include_router(auth.router)
 # Feature UIs (vendors.js, email_rules.js, …) are plain scripts served from procurement/web.
 app.mount("/web", StaticFiles(directory=Path(__file__).parent / "web"), name="web")
 # Feature routers (vendor directory, email rules, item codes) are included at the end of this file.

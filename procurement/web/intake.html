@@ -7,7 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<script>try{const t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>try{const t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}
+// Signed out (the session ended): any API call answers 401, so go to the sign-in page.
+(f => { window.fetch = async (...a) => { const r = await f(...a); if (r.status === 401 && String(a[0]).startsWith("/api/")) location.href = "/login"; return r; }; })(window.fetch.bind(window));</script>
 <style>
 /* Same tokens as the six-step demo (index.html at the repo root) */
 :root{
@@ -148,6 +150,7 @@ tr.row{cursor:pointer} tr.row:hover td{background:var(--accent-soft)} tr.row:foc
       <span class="chip warn devonly" title="The Gmail connection is built (procurement/mailbox.py) but not switched on yet. It needs a dedicated intake mailbox, an app password and an OpenAI API key. Until then the app shows anonymised sample emails run through the real pipeline from hand-written extractions.">Demo data</span>
       <span class="chip devonly" id="mode">Checking…</span>
       <button type="button" class="chip theme-toggle" id="theme-toggle" aria-label="Switch light or dark mode"></button>
+      <a class="chip" href="/logout" title="Sign out">Log out</a>
       <a class="chip devonly" href="/demo" title="Hand-typed walkthrough of steps 4–6 (quotes, comparative statement, HOD note)">Steps 4–6 demo ↗</a>
     </div>
   </div>
